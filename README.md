@@ -97,9 +97,9 @@ pytest -q
 
 FAISS `IndexFlatIP` returns inner-product scores. Because every stored/query vector is L2-normalized, the score is equivalent to cosine similarity. The UI reports this value as a percentage-like similarity score for exploration; it should **not** be interpreted as a calibrated probability that two recordings are covers of the same song.
 
-## Current scope and next validation
+## Current scope and validation roadmap
 
-This modernization pass establishes a reproducible architecture. Before portfolio release it still needs empirical validation:
+The current implementation establishes a reproducible architecture. The next step is empirical validation:
 
 - create a small labelled set containing originals, known covers, and unrelated songs
 - measure Recall@K / ranking quality
