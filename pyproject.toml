@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "semantic-cover-search"
+version = "0.1.0"
+description = "Semantic cover-song discovery from audio transcription and vector similarity."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "faiss-cpu>=1.8",
+  "gradio>=5.0",
+  "numpy>=1.26",
+  "openai>=1.68",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+youtube = ["yt-dlp>=2025.1"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cover_search"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
