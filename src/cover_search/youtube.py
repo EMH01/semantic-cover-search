@@ -12,6 +12,9 @@ class YouTubeAudio:
 
 
 def download_audio(url: str) -> YouTubeAudio:
+    """Limit public URL downloads before transferring large audio files."""
+    if not url.startswith(("https://www.youtube.com/watch?", "https://youtube.com/watch?", "https://youtu.be/")):
+        raise ValueError("Only standard YouTube video URLs are supported.")
     """Download the best available audio stream using the optional yt-dlp dependency."""
     try:
         import yt_dlp
@@ -27,6 +30,11 @@ def download_audio(url: str) -> YouTubeAudio:
             "outtmpl": output_template,
             "quiet": True,
             "noplaylist": True,
+            "max_filesize": 20 * 1024 * 1024,
+            "match_filter": lambda info, *, incomplete=False: (
+                "Video exceeds the 10-minute duration limit."
+                if info.get("duration") and info["duration"] > 600 else None
+            ),
         }
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -38,6 +46,8 @@ def download_audio(url: str) -> YouTubeAudio:
             if not path.exists():
                 raise RuntimeError("yt-dlp completed but no audio file could be located.")
 
+            if path.stat().st_size > 20 * 1024 * 1024:
+                raise ValueError("Downloaded audio exceeds the 20 MB limit.")
             return YouTubeAudio(
                 title=info.get("title") or "Unknown title",
                 artist=info.get("artist") or info.get("uploader") or "Unknown artist",
