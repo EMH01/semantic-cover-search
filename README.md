@@ -1,6 +1,6 @@
 # Semantic Cover Search
 
-A semantic audio-search experiment for finding **cover songs and lyrically similar performances** from their transcribed content.
+A semantic audio-search experiment for finding **songs with similar transcribed lyrics** from their transcribed content.
 
 This project evolved from an earlier cover-search experiment. The core idea is preserved—transcribe songs, embed the lyrics, and search by semantic similarity—but the implementation is now split into testable components and no longer makes YouTube a hard dependency.
 
@@ -23,7 +23,7 @@ flowchart LR
 
 - **Stable primary input:** uploaded audio works independently of YouTube.
 - **Optional YouTube adapter:** `yt-dlp` is isolated behind an optional dependency because third-party extraction behavior changes over time.
-- **No model reload per song:** transcription is provided through a dedicated service instead of loading Whisper inside every URL request.
+- **Reusable model instances:** local Faster-Whisper and multilingual embedding models load lazily once per process.
 - **Correct embedding input:** segmented transcription output is normalized into one text string before embedding.
 - **Explicit vector index:** normalized embeddings use FAISS inner-product search as cosine similarity.
 - **Testable core:** ranking, duplicate detection, transcription normalization, and embedding normalization are covered without real API calls.
@@ -31,8 +31,9 @@ flowchart LR
 ## Stack
 
 - Python 3.11+
-- OpenAI transcription API (`gpt-transcribe` by default)
-- OpenAI embeddings (`text-embedding-3-small` by default)
+- Faster-Whisper (local CPU transcription, default `base`, int8)
+- Sentence Transformers (`paraphrase-multilingual-MiniLM-L12-v2`, CPU)
+- Optional OpenAI transcription and embeddings (requires a key)
 - FAISS
 - Gradio
 - optional `yt-dlp`
@@ -63,10 +64,10 @@ source .venv/bin/activate        # macOS/Linux
 # .venv\Scripts\activate       # Windows
 
 pip install -e ".[dev]"
-cp .env.example .env
+cp .env.example .env  # Windows: copy .env.example .env
 ```
 
-Set `OPENAI_API_KEY` in `.env`, then run:
+The default `AI_PROVIDER=local` needs **no API key**. Model weights are downloaded on first use; the host needs an internet connection for that initial download. Then run:
 
 ```bash
 python app.py
@@ -82,9 +83,12 @@ pip install -e ".[youtube,dev]"
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `OPENAI_API_KEY` | API credential | required |
-| `OPENAI_TRANSCRIPTION_MODEL` | speech-to-text model | `gpt-transcribe` |
-| `OPENAI_EMBEDDING_MODEL` | semantic embedding model | `text-embedding-3-small` |
+| `AI_PROVIDER` | `local` by default; `openai` is optional | `local` |
+| `LOCAL_WHISPER_MODEL` | Faster-Whisper model size | `base` |
+| `LOCAL_EMBEDDING_MODEL` | Multilingual sentence-transformer model | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
+| `OPENAI_API_KEY` | Needed only for the optional OpenAI provider | not required |
+| `OPENAI_TRANSCRIPTION_MODEL` | Optional OpenAI speech-to-text model | `gpt-transcribe` |
+| `OPENAI_EMBEDDING_MODEL` | Optional OpenAI embedding model | `text-embedding-3-small` |
 
 ## Quality checks
 
@@ -111,3 +115,7 @@ The current implementation establishes a reproducible architecture. The next ste
 ## Project evolution
 
 This implementation supersedes the earlier prototype and is the maintained version of the project.
+
+## Local inference limitations
+
+Faster-Whisper recognizes speech and lyrics acoustically, but results can be unreliable on dense music, instrumentals, and noisy recordings. Embeddings compare **transcribed language**, not musical structure; the similarity score is not a probability of two recordings being covers. First use loads two local models into RAM and CPU transcription may take time. The Gradio catalog is scoped to each browser session and is not persistent.
