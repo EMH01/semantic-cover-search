@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 
 import gradio as gr
-from openai import OpenAI
 
 from cover_search.config import Settings
 from cover_search.index import SongIndex
@@ -24,6 +23,8 @@ def read_audio(path: str) -> bytes:
 
 
 def transcribe(data: bytes, filename: str) -> str:
+    if settings.provider not in {"local", "openai"}:
+        raise gr.Error("AI_PROVIDER must be local or openai.")
     if settings.provider == "local":
         return transcribe_local(data, filename, settings.local_whisper_model)
     return transcribe_audio(get_client(), data, filename, settings.transcription_model)
@@ -35,9 +36,12 @@ def embed(transcript: str):
     return embed_text(get_client(), transcript, settings.embedding_model)
 
 
-def get_client() -> OpenAI:
+def get_client():
+    if settings.provider != "openai":
+        raise gr.Error("Select AI_PROVIDER=openai to use the hosted provider.")
     if not os.getenv("OPENAI_API_KEY"):
         raise gr.Error("OpenAI mode requires OPENAI_API_KEY. Use local mode for free inference.")
+    from openai import OpenAI
     return OpenAI()
 
 
