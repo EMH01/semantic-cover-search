@@ -16,6 +16,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+local = ["faster-whisper>=1.1", "sentence-transformers>=3.0"]
+openai = ["openai>=1.68"]
 youtube = ["yt-dlp>=2025.1"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 
