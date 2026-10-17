@@ -11,7 +11,15 @@ from cover_search.services import embed_text, transcribe_audio
 from cover_search.youtube import download_audio
 
 settings = Settings()
-catalog = SongIndex()
+MAX_AUDIO_BYTES = 20 * 1024 * 1024
+
+
+def read_audio(path: str) -> bytes:
+    file = Path(path)
+    if file.stat().st_size > MAX_AUDIO_BYTES:
+        raise gr.Error("Audio exceeds the 20 MB upload limit.")
+    return file.read_bytes()
+
 
 
 def get_client() -> OpenAI:
@@ -20,11 +28,13 @@ def get_client() -> OpenAI:
     return OpenAI()
 
 
-def catalog_rows() -> list[list[str]]:
+def catalog_rows(catalog: SongIndex) -> list[list[str]]:
     return [[song.title, song.artist, song.source] for song in catalog.songs]
 
 
-def add_audio_bytes(data: bytes, filename: str, title: str, artist: str, source: str) -> str:
+def add_audio_bytes(catalog: SongIndex, data: bytes, filename: str, title: str, artist: str, source: str) -> str:
+    if not data or len(data) > MAX_AUDIO_BYTES:
+        raise gr.Error("Audio must be nonempty and at most 20 MB.")
     if not title.strip() or not artist.strip():
         raise gr.Error("Title and artist are required.")
     client = get_client()
@@ -35,19 +45,19 @@ def add_audio_bytes(data: bytes, filename: str, title: str, artist: str, source:
     return f"Indexed {song.label} ({len(transcript)} transcript characters)."
 
 
-def add_upload(audio_path: str | None, title: str, artist: str):
+def add_upload(audio_path: str | None, title: str, artist: str, catalog: SongIndex):
     if not audio_path:
         raise gr.Error("Upload an audio file first.")
     path = Path(audio_path)
-    status = add_audio_bytes(path.read_bytes(), path.name, title, artist, "upload")
-    return status, catalog_rows()
+    status = add_audio_bytes(catalog, read_audio(str(path)), path.name, title, artist, "upload")
+    return status, catalog_rows(catalog), catalog
 
 
-def add_youtube(url: str):
+def add_youtube(url: str, catalog: SongIndex):
     if not url.strip():
         raise gr.Error("Enter a YouTube URL first.")
     audio = download_audio(url.strip())
-    status = add_audio_bytes(audio.data, audio.filename, audio.title, audio.artist, "youtube")
+    status = add_audio_bytes(catalog, audio.data, audio.filename, audio.title, audio.artist, "youtube")
     return status, catalog_rows()
 
 
@@ -58,7 +68,7 @@ def format_results(results):
     ]
 
 
-def search_upload(audio_path: str | None, top_k: int):
+def search_upload(audio_path: str | None, top_k: int, catalog: SongIndex):
     if not audio_path:
         raise gr.Error("Upload a query audio file first.")
     if not catalog.songs:
@@ -67,7 +77,7 @@ def search_upload(audio_path: str | None, top_k: int):
     client = get_client()
     transcript = transcribe_audio(
         client,
-        path.read_bytes(),
+        read_audio(str(path)),
         path.name,
         settings.transcription_model,
     )
@@ -75,7 +85,7 @@ def search_upload(audio_path: str | None, top_k: int):
     return format_results(catalog.search(embedding, int(top_k)))
 
 
-def search_youtube(url: str, top_k: int):
+def search_youtube(url: str, top_k: int, catalog: SongIndex):
     if not url.strip():
         raise gr.Error("Enter a YouTube URL first.")
     if not catalog.songs:
@@ -88,6 +98,7 @@ def search_youtube(url: str, top_k: int):
 
 
 with gr.Blocks(title="Semantic Cover Search") as demo:
+    catalog_state = gr.State(value=SongIndex)
     gr.Markdown(
         "# 🎵 Semantic Cover Search\n"
         "Discover likely covers or lyrically similar performances using transcription + embeddings."
@@ -116,13 +127,13 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         )
         add_file_button.click(
             add_upload,
-            inputs=[add_file, add_title, add_artist],
-            outputs=[add_status, catalog_table],
+            inputs=[add_file, add_title, add_artist, catalog_state],
+            outputs=[add_status, catalog_table, catalog_state],
         )
         add_url_button.click(
             add_youtube,
-            inputs=add_url,
-            outputs=[add_status, catalog_table],
+            inputs=[add_url, catalog_state],
+            outputs=[add_status, catalog_table, catalog_state],
         )
 
     with gr.Tab("Search"):
@@ -143,12 +154,12 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
 
         search_file_button.click(
             search_upload,
-            inputs=[query_file, top_k],
+            inputs=[query_file, top_k, catalog_state],
             outputs=results_table,
         )
         search_url_button.click(
             search_youtube,
-            inputs=[query_url, top_k],
+            inputs=[query_url, top_k, catalog_state],
             outputs=results_table,
         )
 
