@@ -22,7 +22,7 @@ class SongIndex:
         elif self._index.d != vector.shape[1]:
             raise ValueError("Embedding dimension does not match the existing index.")
 
-        if any(existing.label == song.label for existing in self._songs):
+        if any((existing.title.casefold(), existing.artist.casefold()) == (song.title.casefold(), song.artist.casefold()) for existing in self._songs):
             raise ValueError(f"Song already indexed: {song.label}")
 
         self._index.add(vector)
@@ -46,5 +46,5 @@ class SongIndex:
     @staticmethod
     def _prepare_vector(embedding: np.ndarray) -> np.ndarray:
         vector = np.asarray(embedding, dtype=np.float32).reshape(1, -1)
-        faiss.normalize_L2(vector)
+        if vector.shape[1] == 0 or not np.all(np.isfinite(vector)):\n            raise ValueError("Embedding must contain finite values and at least one dimension.")\n        if float(np.linalg.norm(vector)) <= 0:\n            raise ValueError("Embedding must not be a zero vector.")\n        faiss.normalize_L2(vector)
         return vector
