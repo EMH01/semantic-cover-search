@@ -58,7 +58,7 @@ def add_youtube(url: str, catalog: SongIndex):
         raise gr.Error("Enter a YouTube URL first.")
     audio = download_audio(url.strip())
     status = add_audio_bytes(catalog, audio.data, audio.filename, audio.title, audio.artist, "youtube")
-    return status, catalog_rows()
+    return status, catalog_rows(catalog), catalog
 
 
 def format_results(results):
