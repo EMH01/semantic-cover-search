@@ -6,6 +6,7 @@ from openai import OpenAI
 
 from cover_search.config import Settings
 from cover_search.index import SongIndex
+from cover_search.local import embed_local, transcribe_local
 from cover_search.models import Song
 from cover_search.services import embed_text, transcribe_audio
 from cover_search.youtube import download_audio
@@ -22,9 +23,21 @@ def read_audio(path: str) -> bytes:
 
 
 
+def transcribe(data: bytes, filename: str) -> str:
+    if settings.provider == "local":
+        return transcribe_local(data, filename, settings.local_whisper_model)
+    return transcribe_audio(get_client(), data, filename, settings.transcription_model)
+
+
+def embed(transcript: str):
+    if settings.provider == "local":
+        return embed_local(transcript, settings.local_embedding_model)
+    return embed_text(get_client(), transcript, settings.embedding_model)
+
+
 def get_client() -> OpenAI:
     if not os.getenv("OPENAI_API_KEY"):
-        raise gr.Error("Set OPENAI_API_KEY before using transcription or embeddings.")
+        raise gr.Error("OpenAI mode requires OPENAI_API_KEY. Use local mode for free inference.")
     return OpenAI()
 
 
@@ -37,9 +50,8 @@ def add_audio_bytes(catalog: SongIndex, data: bytes, filename: str, title: str, 
         raise gr.Error("Audio must be nonempty and at most 20 MB.")
     if not title.strip() or not artist.strip():
         raise gr.Error("Title and artist are required.")
-    client = get_client()
-    transcript = transcribe_audio(client, data, filename, settings.transcription_model)
-    embedding = embed_text(client, transcript, settings.embedding_model)
+    transcript = transcribe(data, filename)
+    embedding = embed(transcript)
     song = Song(title.strip(), artist.strip(), transcript, source=source)
     catalog.add(song, embedding)
     return f"Indexed {song.label} ({len(transcript)} transcript characters)."
@@ -74,14 +86,8 @@ def search_upload(audio_path: str | None, top_k: int, catalog: SongIndex):
     if not catalog.songs:
         raise gr.Error("Index at least one song before searching.")
     path = Path(audio_path)
-    client = get_client()
-    transcript = transcribe_audio(
-        client,
-        read_audio(str(path)),
-        path.name,
-        settings.transcription_model,
-    )
-    embedding = embed_text(client, transcript, settings.embedding_model)
+    transcript = transcribe(read_audio(str(path)), path.name)
+    embedding = embed(transcript)
     return format_results(catalog.search(embedding, int(top_k)))
 
 
@@ -91,9 +97,8 @@ def search_youtube(url: str, top_k: int, catalog: SongIndex):
     if not catalog.songs:
         raise gr.Error("Index at least one song before searching.")
     audio = download_audio(url.strip())
-    client = get_client()
-    transcript = transcribe_audio(client, audio.data, audio.filename, settings.transcription_model)
-    embedding = embed_text(client, transcript, settings.embedding_model)
+    transcript = transcribe(audio.data, audio.filename)
+    embedding = embed(transcript)
     return format_results(catalog.search(embedding, int(top_k)))
 
 
@@ -101,7 +106,7 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
     catalog_state = gr.State(value=SongIndex)
     gr.Markdown(
         "# 🎵 Semantic Cover Search\n"
-        "Discover likely covers or lyrically similar performances using transcription + embeddings."
+        "Compare lyrical content through transcription and embeddings. Local CPU mode requires no API key."
     )
 
     with gr.Tab("Build catalog"):
