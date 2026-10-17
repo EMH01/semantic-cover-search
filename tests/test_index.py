@@ -27,3 +27,22 @@ def test_duplicate_song_is_rejected():
 
 def test_empty_index_returns_no_results():
     assert SongIndex().search(np.array([1.0, 0.0])) == []
+
+
+@pytest.mark.parametrize("vector", [
+    np.array([0.0, 0.0]),
+    np.array([float("nan"), 1.0]),
+    np.array([float("inf"), 1.0]),
+    np.array([]),
+])
+def test_invalid_embeddings_are_rejected(vector):
+    index = SongIndex()
+    with pytest.raises(ValueError, match="Embedding"):
+        index.add(Song("Track", "Artist", "words"), vector)
+
+
+def test_duplicates_ignore_case():
+    index = SongIndex()
+    index.add(Song("Song", "Artist", "words"), np.array([1.0, 0.0]))
+    with pytest.raises(ValueError, match="already indexed"):
+        index.add(Song("SONG", "artist", "words"), np.array([0.0, 1.0]))
