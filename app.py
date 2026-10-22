@@ -8,7 +8,7 @@ import gradio as gr
 from cover_search.config import Settings
 from cover_search.index import SongIndex
 from cover_search.local import embed_local, transcribe_local
-from cover_search.lyrics import find_lyrics, title_from_video
+from cover_search.lyrics import find_lyrics, lyric_title_for_result, title_from_video
 from cover_search.metadata import audio_metadata
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
@@ -229,12 +229,7 @@ def add_selected_video(selection: str | None, videos: list[dict], catalog: SongI
         raise gr.Error("Selection has expired. Run the search again.") from exc
     return add_known_song(
         catalog, item["title"], f"Uploader: {item['channel']}", "youtube",
-        lyric_title=(
-            item["search_title"]
-            if item.get("search_title")
-            and item["search_title"].strip().casefold() in item["title"].casefold()
-            else title_from_video(item["title"])
-        ),
+        lyric_title=lyric_title_for_result(item["title"], item.get("search_title", "")),
     )
 
 
