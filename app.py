@@ -67,7 +67,6 @@ def add_audio_bytes(
     embedding = embed(transcript)
     song = Song(title.strip(), artist.strip(), transcript, source=source)
     store_song(song, embedding)
-    catalog.add(song, embedding)
     return f"Indexed {song.label} ({len(transcript)} transcript characters).", transcript
 
 
