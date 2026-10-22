@@ -10,6 +10,7 @@ from cover_search.local import embed_local, transcribe_local
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
 from cover_search.services import embed_text, transcribe_audio
+from cover_search.storage import load_catalog, store_song
 from cover_search.youtube import download_audio, search_youtube_videos
 
 settings = Settings()
@@ -65,6 +66,7 @@ def add_audio_bytes(
     transcript = transcribe(data, filename)
     embedding = embed(transcript)
     song = Song(title.strip(), artist.strip(), transcript, source=source)
+    store_song(song, embedding)
     catalog.add(song, embedding)
     return f"Indexed {song.label} ({len(transcript)} transcript characters).", transcript
 
@@ -76,7 +78,8 @@ def add_upload(audio_path: str | None, title: str, artist: str, catalog: SongInd
     status, transcript = add_audio_bytes(
         catalog, read_audio(str(path)), path.name, title, artist, "upload"
     )
-    return status, catalog_rows(catalog), catalog, transcript
+    saved = load_catalog()
+    return status, catalog_rows(saved), saved, transcript
 
 
 def add_youtube(url: str, catalog: SongIndex):
@@ -86,7 +89,8 @@ def add_youtube(url: str, catalog: SongIndex):
     status, transcript = add_audio_bytes(
         catalog, audio.data, audio.filename, audio.title, audio.artist, "youtube"
     )
-    return status, catalog_rows(catalog), catalog, transcript
+    saved = load_catalog()
+    return status, catalog_rows(saved), saved, transcript
 
 
 def format_results(results):
@@ -99,6 +103,7 @@ def format_results(results):
 def search_upload(audio_path: str | None, top_k: int, catalog: SongIndex):
     if not audio_path:
         raise gr.Error("Upload a query audio file first.")
+    catalog = load_catalog()
     if not catalog.songs:
         raise gr.Error("Index at least one song before searching.")
     path = Path(audio_path)
@@ -176,7 +181,7 @@ def add_selected_video(selection: str | None, videos: list[dict], catalog: SongI
 
 
 with gr.Blocks(title="Semantic Cover Search") as demo:
-    catalog_state = gr.State(value=SongIndex)
+    catalog_state = gr.State(value=load_catalog)
     youtube_results_state = gr.State(value=[])
     gr.Markdown(
         "# 🎵 Semantic Cover Search\n"
