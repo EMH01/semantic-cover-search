@@ -380,6 +380,61 @@ def search_public_versions(title: str):
     )
 
 
+def search_recording_on_youtube(
+    audio_path: str | None, progress: gr.Progress = gr.Progress()
+):
+    """Transcribe a recording and search YouTube for lyric-text candidates.
+
+    This does not identify the recording from its melody or guarantee song ID.
+    """
+    if not audio_path:
+        raise gr.Error("Record or upload a short sung or spoken fragment first.")
+    path = Path(audio_path)
+    progress(0.12, desc="Recognizing sung or spoken words locally…")
+    try:
+        recognized = transcribe(read_audio(str(path)), path.name).strip()
+    except (ValueError, RuntimeError) as exc:
+        raise gr.Error(
+            "No recognizable words were extracted. Try a clearer phrase; "
+            "humming and melodic matching are not implemented."
+        ) from exc
+    if not recognized:
+        raise gr.Error("The recognizer returned no words to search for.")
+    progress(0.7, desc="Searching YouTube with the recognized lyric phrase…")
+    try:
+        videos = search_youtube_lyrics_fragment(recognized)
+    except ValueError as exc:
+        raise gr.Error(str(exc)) from exc
+    except Exception as exc:
+        raise gr.Error("YouTube phrase search is unavailable. Try again later.") from exc
+    note = (
+        f"**{len(videos)} possible YouTube results** from the recognized words. "
+        "These are **unverified song candidates**, not audio/melody matches. "
+        "Check video titles and listen to confirm the song before adding it."
+    )
+    options = [
+        (f"{i + 1}. {item['title']} — {item['channel']}", str(i))
+        for i, item in enumerate(videos)
+    ]
+    progress(1.0, desc="Candidate search finished")
+    return (
+        note,
+        render_video_cards(videos),
+        videos,
+        gr.update(choices=options, value=None, visible=bool(videos)),
+        gr.update(visible=bool(videos)),
+        recognized,
+    )
+
+
+def processing_status():
+    """Immediate visible feedback before the queued import starts."""
+    return (
+        "⏳ **Processing song…** Checking reference lyrics first; "
+        "audio download, transcription and embedding may follow."
+    )
+
+
 def add_selected_video(
     selection: str | None, videos: list[dict], catalog: SongIndex,
     progress: gr.Progress = gr.Progress(),
@@ -412,6 +467,40 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         )
         public_title = gr.Textbox(label="Song title", placeholder="e.g. Hallelujah")
         public_search = gr.Button("Search covers on YouTube", variant="primary")
+        with gr.Accordion("Search by singing or recording (experimental)", open=False):
+            gr.Markdown(
+                "Record or upload a short phrase. Parakeet will recognize **words**, "
+                "then search YouTube for possible songs. This is not yet melody or "
+                "humming recognition, and no local catalog is required."
+            )
+            query_file = gr.Audio(
+                type="filepath",
+                sources=["microphone", "upload"],
+                label="Sing, speak or upload a short fragment",
+            )
+            record_search_button = gr.Button("Find YouTube candidates from recording")
+            recording_text = gr.Textbox(
+                label="Words recognized from your recording (may be inaccurate)",
+                lines=3,
+                interactive=False,
+            )
+            gr.Markdown(
+                "**Optional:** compare the same recording with songs in Local catalog."
+            )
+            top_k = gr.Slider(1, 10, value=5, step=1, label="Local top results")
+            search_file_button = gr.Button("Compare with Local catalog lyrics")
+            results_table = gr.Dataframe(
+                headers=["Rank", "Title", "Performer / uploader", "Similarity", "Source"],
+                datatype=["number", "str", "str", "str", "str"],
+                interactive=False,
+                label="Closest lyric matches in local catalog",
+            )
+            search_file_button.click(
+                search_upload,
+                inputs=[query_file, top_k, catalog_state],
+                outputs=results_table,
+                show_progress="minimal",
+            )
         public_status = gr.Markdown()
         public_results = gr.HTML(label="YouTube results")
         result_selection = gr.Dropdown(
@@ -433,6 +522,19 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
                 youtube_results_state,
                 result_selection,
                 add_selected_button,
+            ],
+            show_progress="minimal",
+        )
+        record_search_button.click(
+            search_recording_on_youtube,
+            inputs=[query_file],
+            outputs=[
+                public_status,
+                public_results,
+                youtube_results_state,
+                result_selection,
+                add_selected_button,
+                recording_text,
             ],
             show_progress="minimal",
         )
@@ -508,30 +610,6 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
             outputs=[add_status, catalog_table, catalog_state, lyrics_view],
         )
 
-    with gr.Tab("Experimental singing search"):
-        top_k = gr.Slider(1, 10, value=5, step=1, label="Top results")
-        results_table = gr.Dataframe(
-            headers=["Rank", "Title", "Performer / uploader", "Similarity", "Source"],
-            datatype=["number", "str", "str", "str", "str"],
-            interactive=False,
-            label="Closest lyric matches in the session",
-        )
-        gr.Markdown(
-            "Record a short sung or spoken phrase. Parakeet transcribes your recording "
-            "and searches the lyrics indexed in this session. "
-            "It cannot yet identify unknown songs from the whole internet or recognize humming."
-        )
-        query_file = gr.Audio(
-            type="filepath",
-            sources=["microphone"],
-            label="Record a fragment to search",
-        )
-        search_file_button = gr.Button("Find similar songs", variant="primary")
-        search_file_button.click(
-            search_upload,
-            inputs=[query_file, top_k, catalog_state],
-            outputs=results_table,
-        )
 
 
 if __name__ == "__main__":
