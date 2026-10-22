@@ -171,26 +171,19 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
             interactive=False,
             label="Most similar indexed songs",
         )
-        with gr.Row():
-            with gr.Column():
-                query_file = gr.Audio(
-                    type="filepath",
-                    sources=["upload", "microphone"],
-                    label="Sing, record or upload a fragment to search",
-                )
-                search_file_button = gr.Button("Find similar songs", variant="primary")
-            with gr.Column():
-                query_url = gr.Textbox(label="Query YouTube URL")
-                search_url_button = gr.Button("Search from YouTube")
-
+        gr.Markdown(
+            "Record yourself singing or speaking a short fragment to search "
+            "the songs already in your catalog."
+        )
+        query_file = gr.Audio(
+            type="filepath",
+            sources=["microphone"],
+            label="Record a fragment to search",
+        )
+        search_file_button = gr.Button("Find similar songs", variant="primary")
         search_file_button.click(
             search_upload,
             inputs=[query_file, top_k, catalog_state],
-            outputs=results_table,
-        )
-        search_url_button.click(
-            search_youtube,
-            inputs=[query_url, top_k, catalog_state],
             outputs=results_table,
         )
 
