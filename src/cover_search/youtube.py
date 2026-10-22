@@ -3,6 +3,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlparse
 
+import httpx
+
 
 @dataclass(frozen=True, slots=True)
 class YouTubeAudio:
@@ -111,3 +113,26 @@ def search_youtube_videos(title: str, limit: int = 12) -> list[dict[str, str]]:
             "url": f"https://www.youtube.com/watch?v={video_id}",
         })
     return videos
+
+
+def video_metadata(url: str) -> dict[str, str]:
+    """Get public YouTube video title and uploader without downloading audio."""
+    validated = validate_youtube_url(url)
+    parsed = urlparse(validated)
+    if parsed.hostname == "youtu.be":
+        video_id = parsed.path.strip("/")
+    else:
+        video_id = parse_qs(parsed.query)["v"][0]
+    canonical = f"https://www.youtube.com/watch?v={video_id}"
+    with httpx.Client(timeout=12) as client:
+        response = client.get(
+            "https://www.youtube.com/oembed",
+            params={"url": canonical, "format": "json"},
+        )
+        response.raise_for_status()
+        data = response.json()
+    return {
+        "title": str(data.get("title") or "Untitled YouTube video"),
+        "channel": str(data.get("author_name") or "Unknown uploader"),
+        "url": canonical,
+    }
