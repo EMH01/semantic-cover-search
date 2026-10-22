@@ -1,15 +1,15 @@
 # Semantic Cover Search
 
-A research prototype combining online musical-work discovery with an experimental local audio-transcription and semantic-retrieval pipeline.
+A research prototype combining YouTube cover discovery with experimental local audio transcription and semantic retrieval.
 
 This project evolved from an earlier cover-search experiment. The core idea is preserved—transcribe songs, embed the lyrics, and search by semantic similarity—but the implementation is now split into testable components while keeping YouTube extraction isolated in its own adapter.
 
 ## Modes
 
-- **Discover versions by song title:** searches MusicBrainz for compositions and lists recordings linked to the best-matching work. No manual catalog, API key, audio upload or local model required. Results are metadata candidates, not verified covers. Works sharing a title may be ambiguous; only the top work is explored.
-- **Experimental local catalog and singing search:** transcribes recordings with local Parakeet, embeds the text and compares against recordings manually indexed in the same browser session. It **does not search the internet** or identify unknown songs by melody.
+- **Discover covers on YouTube:** searches YouTube video metadata for a title and the word "cover" using `yt-dlp`, returning video titles, uploader channels and direct YouTube watch URLs. It does not download media for search and does not require an API key. Results are **unverified search candidates**: the uploader may not be the performing artist, and some videos may not be covers.
+- **Experimental local catalog and singing search:** uses local Parakeet speech transcription, multilingual text embeddings and FAISS to compare against recordings indexed in a browser session. It does **not** identify unknown songs from the whole internet, and it does not compare melodies.
 
-MusicBrainz is free for non-commercial API use and requires an identifying User-Agent and at most one call per second. Its metadata does not supply song lyrics or audio.
+YouTube search availability and metadata depend on the third-party service and the installed `yt-dlp` version. A JavaScript runtime may be needed for some YouTube extraction paths. MusicBrainz discovery code remains an experimental research module but is not used by the main search tab.
 
 ## Pipeline
 
@@ -44,7 +44,7 @@ flowchart LR
 - Optional OpenAI transcription and embeddings (requires a key)
 - FAISS
 - Gradio
-- MusicBrainz public API (HTTPX)
+- YouTube search metadata via `yt-dlp`
 - `yt-dlp` (YouTube and YouTube Music adapter)
 
 ## Project structure
