@@ -1,4 +1,5 @@
 import os
+from html import escape
 from pathlib import Path
 
 import gradio as gr
@@ -117,6 +118,26 @@ def search_youtube(url: str, top_k: int, catalog: SongIndex):
     return format_results(catalog.search(embedding, int(top_k)))
 
 
+def render_video_cards(videos: list[dict[str, str]]) -> str:
+    """Create readable, safely escaped cards from third-party video metadata."""
+    if not videos:
+        return "<p>No matching videos found.</p>"
+    cards = []
+    for item in videos:
+        title = escape(item["title"])
+        channel = escape(item["channel"])
+        url = escape(item["url"], quote=True)
+        cards.append(
+            '<article style="padding:14px 16px;border:1px solid var(--border-color-primary);'
+            'border-radius:10px;margin:10px 0;">'
+            f'<div style="font-weight:600;margin-bottom:6px;">{title}</div>'
+            f'<div style="opacity:.75;font-size:.9em;margin-bottom:9px;">Channel: {channel}</div>'
+            f'<a href="{url}" target="_blank" rel="noopener noreferrer">'
+            'Watch on YouTube ↗</a></article>'
+        )
+    return "".join(cards)
+
+
 def search_public_versions(title: str):
     try:
         videos = search_youtube_videos(title)
@@ -126,15 +147,12 @@ def search_public_versions(title: str):
         raise gr.Error(
             "YouTube search is temporarily unavailable. Check connectivity or yt-dlp."
         ) from exc
-    if not videos:
-        return "No YouTube videos found for this search.", []
     note = (
-        f"Showing {len(videos)} YouTube results for **{title.strip()} covers**. "
-        "The **Channel** is the video uploader, not necessarily the performing artist. "
-        "These are search candidates, not verified cover recordings."
+        f"Showing {len(videos)} YouTube video candidates for **{escape(title.strip())}**. "
+        "Channels are uploaders, not necessarily performing artists. "
+        "These are not verified cover recordings."
     )
-    rows = [[item["title"], item["channel"], item["url"]] for item in videos]
-    return note, rows
+    return note, render_video_cards(videos)
 
 
 with gr.Blocks(title="Semantic Cover Search") as demo:
@@ -154,12 +172,7 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         public_title = gr.Textbox(label="Song title", placeholder="e.g. Hallelujah")
         public_search = gr.Button("Search covers on YouTube", variant="primary")
         public_status = gr.Markdown()
-        public_results = gr.Dataframe(
-            headers=["Video title", "YouTube channel", "Watch on YouTube"],
-            datatype=["str", "str", "str"],
-            interactive=False,
-            label="YouTube search results",
-        )
+        public_results = gr.HTML(label="YouTube results")
         public_search.click(
             search_public_versions,
             inputs=public_title,
