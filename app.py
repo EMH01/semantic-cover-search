@@ -7,6 +7,7 @@ import gradio as gr
 from cover_search.config import Settings
 from cover_search.index import SongIndex
 from cover_search.local import embed_local, transcribe_local
+from cover_search.metadata import audio_metadata
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
 from cover_search.services import embed_text, transcribe_audio
@@ -61,11 +62,11 @@ def add_audio_bytes(
 ) -> tuple[str, str]:
     if not data or len(data) > MAX_AUDIO_BYTES:
         raise gr.Error("Audio must be nonempty and at most 20 MB.")
-    if not title.strip() or not artist.strip():
-        raise gr.Error("Title and artist are required.")
+    title = title.strip() or Path(filename).stem.strip() or "Untitled recording"
+    artist = artist.strip() or "Unknown performer"
     transcript = transcribe(data, filename)
     embedding = embed(transcript)
-    song = Song(title.strip(), artist.strip(), transcript, source=source)
+    song = Song(title, artist, transcript, source=source)
     store_song(song, embedding)
     return f"Indexed {song.label} ({len(transcript)} transcript characters).", transcript
 
@@ -74,8 +75,10 @@ def add_upload(audio_path: str | None, title: str, artist: str, catalog: SongInd
     if not audio_path:
         raise gr.Error("Upload an audio file first.")
     path = Path(audio_path)
+    detected_title, detected_artist = audio_metadata(str(path))
     status, transcript = add_audio_bytes(
-        catalog, read_audio(str(path)), path.name, title, artist, "upload"
+        catalog, read_audio(str(path)), path.name,
+        title.strip() or detected_title, artist.strip() or detected_artist, "upload",
     )
     saved = load_catalog()
     return status, catalog_rows(saved), saved, transcript
@@ -218,8 +221,13 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
                 add_file = gr.Audio(
                     type="filepath", sources=["upload"], label="Audio file to index"
                 )
-                add_title = gr.Textbox(label="Title")
-                add_artist = gr.Textbox(label="Artist")
+                add_title = gr.Textbox(label="Song title (editable, optional)")
+                add_artist = gr.Textbox(label="Performing artist (editable, optional)")
+                add_file.change(
+                    audio_metadata,
+                    inputs=add_file,
+                    outputs=[add_title, add_artist],
+                )
                 add_file_button = gr.Button("Transcribe & index", variant="primary")
             with gr.Column():
                 gr.Markdown("### Add a song from YouTube")
