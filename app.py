@@ -65,25 +65,27 @@ def add_audio_bytes(
     embedding = embed(transcript)
     song = Song(title.strip(), artist.strip(), transcript, source=source)
     catalog.add(song, embedding)
-    return f"Indexed {song.label} ({len(transcript)} transcript characters)."
+    return f"Indexed {song.label} ({len(transcript)} transcript characters).", transcript
 
 
 def add_upload(audio_path: str | None, title: str, artist: str, catalog: SongIndex):
     if not audio_path:
         raise gr.Error("Upload an audio file first.")
     path = Path(audio_path)
-    status = add_audio_bytes(catalog, read_audio(str(path)), path.name, title, artist, "upload")
-    return status, catalog_rows(catalog), catalog
+    status, transcript = add_audio_bytes(
+        catalog, read_audio(str(path)), path.name, title, artist, "upload"
+    )
+    return status, catalog_rows(catalog), catalog, transcript
 
 
 def add_youtube(url: str, catalog: SongIndex):
     if not url.strip():
         raise gr.Error("Enter a YouTube URL first.")
     audio = download_audio(url.strip())
-    status = add_audio_bytes(
+    status, transcript = add_audio_bytes(
         catalog, audio.data, audio.filename, audio.title, audio.artist, "youtube"
     )
-    return status, catalog_rows(catalog), catalog
+    return status, catalog_rows(catalog), catalog, transcript
 
 
 def format_results(results):
@@ -137,6 +139,13 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
                 add_url_button = gr.Button("Download, transcribe & index")
 
         add_status = gr.Markdown()
+        transcript_view = gr.Textbox(
+            label="Last indexed transcription",
+            lines=6,
+            max_lines=14,
+            interactive=False,
+            show_copy_button=True,
+        )
         catalog_table = gr.Dataframe(
             headers=["Title", "Artist", "Source"],
             datatype=["str", "str", "str"],
@@ -146,7 +155,7 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         add_file_button.click(
             add_upload,
             inputs=[add_file, add_title, add_artist, catalog_state],
-            outputs=[add_status, catalog_table, catalog_state],
+            outputs=[add_status, catalog_table, catalog_state, transcript_view],
         )
         add_url_button.click(
             add_youtube,
