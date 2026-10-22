@@ -56,7 +56,7 @@ def catalog_rows(catalog: SongIndex) -> list[list[str]]:
 
 def add_audio_bytes(
     catalog: SongIndex, data: bytes, filename: str, title: str, artist: str, source: str
-) -> str:
+) -> tuple[str, str]:
     if not data or len(data) > MAX_AUDIO_BYTES:
         raise gr.Error("Audio must be nonempty and at most 20 MB.")
     if not title.strip() or not artist.strip():
