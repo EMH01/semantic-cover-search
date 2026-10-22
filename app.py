@@ -128,8 +128,8 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
     with gr.Tab("Add songs to catalog"):
         with gr.Row():
             with gr.Column():
-                gr.Markdown("### Upload or record a song for the catalog")
-                add_file = gr.Audio(type="filepath", sources=["upload", "microphone"], label="Catalog audio (upload or record)")
+                gr.Markdown("### Upload a song to the catalog")
+                add_file = gr.Audio(type="filepath", sources=["upload"], label="Audio file to index")
                 add_title = gr.Textbox(label="Title")
                 add_artist = gr.Textbox(label="Artist")
                 add_file_button = gr.Button("Transcribe & index", variant="primary")
@@ -139,12 +139,13 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
                 add_url_button = gr.Button("Download, transcribe & index")
 
         add_status = gr.Markdown()
-        transcript_view = gr.Textbox(
-            label="Last indexed transcription",
-            lines=6,
-            max_lines=14,
-            interactive=False,
-        )
+        with gr.Accordion("Latest indexed transcript", open=False):
+            transcript_view = gr.Textbox(
+                label="Recognized lyrics / speech",
+                lines=8,
+                max_lines=12,
+                interactive=False,
+            )
         catalog_table = gr.Dataframe(
             headers=["Title", "Artist", "Source"],
             datatype=["str", "str", "str"],
