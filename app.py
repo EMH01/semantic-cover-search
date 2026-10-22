@@ -21,7 +21,6 @@ def read_audio(path: str) -> bytes:
     return file.read_bytes()
 
 
-
 def transcribe(data: bytes, filename: str) -> str:
     if settings.provider not in {"local", "openai"}:
         raise gr.Error("AI_PROVIDER must be local or openai.")
@@ -42,6 +41,7 @@ def get_client():
     if not os.getenv("OPENAI_API_KEY"):
         raise gr.Error("OpenAI mode requires OPENAI_API_KEY. Use local mode for free inference.")
     from openai import OpenAI
+
     return OpenAI()
 
 
@@ -49,7 +49,9 @@ def catalog_rows(catalog: SongIndex) -> list[list[str]]:
     return [[song.title, song.artist, song.source] for song in catalog.songs]
 
 
-def add_audio_bytes(catalog: SongIndex, data: bytes, filename: str, title: str, artist: str, source: str) -> str:
+def add_audio_bytes(
+    catalog: SongIndex, data: bytes, filename: str, title: str, artist: str, source: str
+) -> str:
     if not data or len(data) > MAX_AUDIO_BYTES:
         raise gr.Error("Audio must be nonempty and at most 20 MB.")
     if not title.strip() or not artist.strip():
@@ -73,7 +75,9 @@ def add_youtube(url: str, catalog: SongIndex):
     if not url.strip():
         raise gr.Error("Enter a YouTube URL first.")
     audio = download_audio(url.strip())
-    status = add_audio_bytes(catalog, audio.data, audio.filename, audio.title, audio.artist, "youtube")
+    status = add_audio_bytes(
+        catalog, audio.data, audio.filename, audio.title, audio.artist, "youtube"
+    )
     return status, catalog_rows(catalog), catalog
 
 
@@ -110,7 +114,8 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
     catalog_state = gr.State(value=SongIndex)
     gr.Markdown(
         "# 🎵 Semantic Cover Search\n"
-        "Compare lyrical content through transcription and embeddings. Local CPU mode requires no API key."
+        "Compare lyrical content through transcription and embeddings. "
+        "Local CPU mode requires no API key."
     )
 
     with gr.Tab("Build catalog"):
