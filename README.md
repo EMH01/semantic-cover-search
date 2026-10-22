@@ -6,7 +6,7 @@ This project evolved from an earlier cover-search experiment. The core idea is p
 
 ## Modes
 
-- **Discover covers on YouTube:** searches YouTube video metadata for a title and the word "cover" using `yt-dlp`, returning video titles, uploader channels and direct YouTube watch URLs. It does not download media for search and does not require an API key. Results are **unverified search candidates**: the uploader may not be the performing artist, and some videos may not be covers.
+- **Discover covers on YouTube:** searches YouTube video metadata for a title and the word "cover" using `yt-dlp`, returning video titles, uploader channels and direct watch links. No media is downloaded during search. You can choose a result and **Add selected video to local catalog**; that explicit action downloads, transcribes and indexes the chosen audio. Results remain unverified cover candidates and uploader names are not assumed to be performers.
 - **Experimental local catalog and singing search:** uses local Parakeet speech transcription, multilingual text embeddings and FAISS to compare against recordings indexed in a browser session. It does **not** identify unknown songs from the whole internet, and it does not compare melodies.
 
 YouTube search availability and metadata depend on the third-party service and the installed `yt-dlp` version. A JavaScript runtime may be needed for some YouTube extraction paths. MusicBrainz discovery code remains an experimental research module but is not used by the main search tab.
