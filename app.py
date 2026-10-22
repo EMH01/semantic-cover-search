@@ -84,10 +84,11 @@ def add_known_song(
             f"**Already in local catalog:** {escape(title)} — {escape(artist)}.",
             catalog_rows(catalog), catalog, "",
         )
+    requested_lyrics_title = (lyric_title or title).strip()
     match = None
     problem = ""
     try:
-        match = find_lyrics(lyric_title or title, lyric_artist)
+        match = find_lyrics(requested_lyrics_title, lyric_artist)
     except Exception:
         problem = " The lyric service is temporarily unavailable."
     lyrics = match.text if match else ""
@@ -114,8 +115,9 @@ def add_known_song(
         )
     else:
         status += (
-            " No reliable lyrics were indexed; this entry is metadata-only "
-            "and cannot yet be retrieved by lyric similarity."
+            f" Lyrics lookup for **{escape(requested_lyrics_title)}** did not produce "
+            "an exact usable match; this entry is metadata-only and cannot "
+            "be retrieved by lyric similarity yet."
         )
     return status + problem, catalog_rows(catalog), catalog, lyrics
 
