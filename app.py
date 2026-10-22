@@ -130,6 +130,7 @@ def add_known_song(
             fallback_error = type(exc).__name__
             text = ""
 
+    display_text = text
     embedding = None
     index_error = False
     if text:
@@ -171,7 +172,10 @@ def add_known_song(
                 " Audio download or speech recognition failed "
                 f"({escape(fallback_error)})."
             )
-        view = render_transcription(None)
+        if match is not None:
+            view = render_lyrics(match)
+        else:
+            view = render_transcription(display_text or None)
 
     if lookup_error:
         status += f" LRCLIB issue: {escape(lookup_error)}"
