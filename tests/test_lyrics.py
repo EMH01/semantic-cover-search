@@ -1,7 +1,5 @@
 from unittest.mock import patch
 
-import httpx
-
 from cover_search.lyrics import find_lyrics, title_from_video
 
 
