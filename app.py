@@ -152,11 +152,32 @@ def search_public_versions(title: str):
         "Channels are uploaders, not necessarily performing artists. "
         "These are not verified cover recordings."
     )
-    return note, render_video_cards(videos)
+    options = [
+        (f"{i + 1}. {item['title']} — {item['channel']}", str(i))
+        for i, item in enumerate(videos)
+    ]
+    return note, render_video_cards(videos), videos, gr.update(choices=options, value=None)
+
+
+def add_selected_video(selection: str | None, videos: list[dict], catalog: SongIndex):
+    if selection is None:
+        raise gr.Error("Select a video from the search results first.")
+    try:
+        item = videos[int(selection)]
+    except (TypeError, ValueError, IndexError) as exc:
+        raise gr.Error("Selection has expired. Run the search again.") from exc
+    # Treat the uploader explicitly as metadata, not a verified performer.
+    audio = download_audio(item["url"])
+    status, transcript = add_audio_bytes(
+        catalog, audio.data, audio.filename, item["title"],
+        f"Uploader: {item['channel']}", "youtube",
+    )
+    return status, catalog_rows(catalog), catalog, transcript
 
 
 with gr.Blocks(title="Semantic Cover Search") as demo:
     catalog_state = gr.State(value=SongIndex)
+    youtube_results_state = gr.State(value=[])
     gr.Markdown(
         "# 🎵 Semantic Cover Search\n"
         "Compare lyrical content through transcription and embeddings. "
@@ -173,13 +194,20 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         public_search = gr.Button("Search covers on YouTube", variant="primary")
         public_status = gr.Markdown()
         public_results = gr.HTML(label="YouTube results")
+        result_selection = gr.Dropdown(
+            label="Choose a video to add to your local catalog",
+            choices=[],
+            interactive=True,
+        )
+        add_selected_button = gr.Button("Add selected video to local catalog")
+        selected_status = gr.Markdown()
         public_search.click(
             search_public_versions,
             inputs=public_title,
-            outputs=[public_status, public_results],
+            outputs=[public_status, public_results, youtube_results_state, result_selection],
         )
 
-    with gr.Tab("Experimental local catalog"):
+    with gr.Tab("Local catalog"):
         with gr.Row():
             with gr.Column():
                 gr.Markdown("### Upload a song to the catalog")
@@ -205,6 +233,11 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
             datatype=["str", "str", "str"],
             interactive=False,
             label="Indexed catalog",
+        )
+        add_selected_button.click(
+            add_selected_video,
+            inputs=[result_selection, youtube_results_state, catalog_state],
+            outputs=[selected_status, catalog_table, catalog_state, transcript_view],
         )
         add_file_button.click(
             add_upload,
