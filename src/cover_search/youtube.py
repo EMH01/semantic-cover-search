@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib.parse import parse_qs, urlparse
 
 
 @dataclass(frozen=True, slots=True)
@@ -11,11 +12,26 @@ class YouTubeAudio:
     data: bytes
 
 
+def validate_youtube_url(url: str) -> str:
+    """Accept canonical video, shortened and YouTube Music links only."""
+    parsed = urlparse(url.strip())
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or parsed.username or parsed.password:
+        raise ValueError("Enter a valid HTTPS YouTube video URL.")
+    if host in {"www.youtube.com", "youtube.com", "m.youtube.com", "music.youtube.com"}:
+        if parsed.path != "/watch" or not parse_qs(parsed.query).get("v"):
+            raise ValueError("Enter a YouTube video URL containing a video ID.")
+    elif host == "youtu.be":
+        if not parsed.path.strip("/") or "/" in parsed.path.strip("/"):
+            raise ValueError("Enter a valid shortened YouTube video URL.")
+    else:
+        raise ValueError("Only YouTube and YouTube Music video URLs are supported.")
+    return url.strip()
+
+
 def download_audio(url: str) -> YouTubeAudio:
-    """Limit public URL downloads before transferring large audio files."""
-    if not url.startswith(("https://www.youtube.com/watch?", "https://youtube.com/watch?", "https://youtu.be/")):
-        raise ValueError("Only standard YouTube video URLs are supported.")
-    """Download the best available audio stream using the optional yt-dlp dependency."""
+    """Download a bounded audio source using the optional yt-dlp adapter."""
+    url = validate_youtube_url(url)
     try:
         import yt_dlp
     except ImportError as exc:
