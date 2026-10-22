@@ -39,3 +39,43 @@ def test_recordings_for_work_parses_artist_credit():
 def test_discover_versions_returns_empty_when_no_work_found():
     with patch("cover_search.discovery.find_works", return_value=[]):
         assert discover_versions("unknown") == ([], [])
+
+
+def test_musicbrainz_temporary_503_is_retried(monkeypatch):
+    from types import SimpleNamespace
+
+    import httpx
+
+    from cover_search import discovery
+
+    response_codes = iter([503, 200])
+
+    class FakeResponse:
+        def __init__(self, status_code):
+            self.status_code = status_code
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                request = httpx.Request("GET", "https://musicbrainz.org/ws/2/work")
+                raise httpx.HTTPStatusError("Unavailable", request=request, response=httpx.Response(self.status_code, request=request))
+
+        def json(self):
+            return {"works": []}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, *args, **kwargs):
+            return FakeResponse(next(response_codes))
+
+    monkeypatch.setattr(discovery.httpx, "Client", FakeClient)
+    monkeypatch.setattr(discovery.time, "sleep", lambda _: None)
+    monkeypatch.setattr(discovery.time, "monotonic", lambda: 100.0)
+    assert discovery._fetch("work", {"query": "Hallelujah"}) == {"works": []}
