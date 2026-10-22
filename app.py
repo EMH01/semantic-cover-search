@@ -20,7 +20,12 @@ from cover_search.metadata import audio_metadata
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
 from cover_search.services import embed_text, transcribe_audio
-from cover_search.youtube import download_audio, search_youtube_videos, video_metadata
+from cover_search.youtube import (
+    download_audio,
+    search_youtube_lyrics_fragment,
+    search_youtube_videos,
+    video_metadata,
+)
 
 settings = Settings()
 MAX_AUDIO_BYTES = 20 * 1024 * 1024
@@ -85,6 +90,7 @@ def add_known_song(
     lyric_artist: str = "",
     fallback_audio_path: str | None = None,
     fallback_youtube_url: str | None = None,
+    progress: gr.Progress | None = None,
 ) -> tuple[str, list[list[str]], SongIndex, str]:
     """Try reference lyrics first, then speech recognition for unavailable lyrics."""
     title = title.strip() or "Untitled recording"
@@ -101,6 +107,8 @@ def add_known_song(
             render_transcription(None, "This song is already in the catalog."),
         )
 
+    if progress is not None:
+        progress(0.12, desc="Searching for reference lyrics…")
     requested_title = (lyric_title or title).strip()
     match = None
     lookup_error = ""
@@ -113,6 +121,8 @@ def add_known_song(
     origin = "lrclib" if text else "none"
     fallback_error = ""
     if not text and (fallback_audio_path or fallback_youtube_url):
+        if progress is not None:
+            progress(0.35, desc="No reference lyrics; preparing audio…")
         try:
             if fallback_audio_path:
                 file = Path(fallback_audio_path)
@@ -121,6 +131,8 @@ def add_known_song(
                 # yt-dlp enforces duration and file-size bounds.
                 audio = download_audio(fallback_youtube_url)
                 audio_bytes, audio_name = audio.data, audio.filename
+            if progress is not None:
+                progress(0.62, desc="Transcribing audio with local ASR…")
             text = transcribe(audio_bytes, audio_name).strip()
             if not text:
                 raise ValueError("The speech recognizer did not detect any words.")
@@ -134,6 +146,8 @@ def add_known_song(
     embedding = None
     index_error = False
     if text:
+        if progress is not None:
+            progress(0.82, desc="Creating text embedding for similarity search…")
         try:
             embedding = embed(text)
         except Exception:
@@ -179,9 +193,14 @@ def add_known_song(
 
     if lookup_error:
         status += f" LRCLIB issue: {escape(lookup_error)}"
+    if progress is not None:
+        progress(1.0, desc="Catalog updated")
     return status, catalog_rows(catalog), catalog, view
 
-def add_upload(audio_path: str | None, title: str, artist: str, catalog: SongIndex):
+def add_upload(
+    audio_path: str | None, title: str, artist: str, catalog: SongIndex,
+    progress: gr.Progress = gr.Progress(),
+):
     if not audio_path:
         raise gr.Error("Upload an audio file first.")
     path = Path(audio_path)
@@ -189,17 +208,22 @@ def add_upload(audio_path: str | None, title: str, artist: str, catalog: SongInd
         raise gr.Error("Unsupported audio format.")
     if not 0 < path.stat().st_size <= MAX_AUDIO_BYTES:
         raise gr.Error("Audio must be nonempty and at most 20 MB.")
+    progress(0.05, desc="Reading audio metadata…")
     detected_title, detected_artist = audio_metadata(audio_path)
     return add_known_song(
         catalog, title or detected_title, artist or detected_artist, "upload",
         lyric_artist=artist or detected_artist,
         fallback_audio_path=audio_path,
+        progress=progress,
     )
 
 
-def add_youtube(url: str, catalog: SongIndex):
+def add_youtube(
+    url: str, catalog: SongIndex, progress: gr.Progress = gr.Progress()
+):
     if not url.strip():
         raise gr.Error("Enter a YouTube URL first.")
+    progress(0.05, desc="Reading YouTube video metadata…")
     try:
         video = video_metadata(url)
     except ValueError as exc:
@@ -210,6 +234,7 @@ def add_youtube(url: str, catalog: SongIndex):
         catalog, video["title"], f"Uploader: {video['channel']}", "youtube",
         lyric_title=title_from_video(video["title"]),
         fallback_youtube_url=video["url"],
+        progress=progress,
     )
 
 
@@ -355,17 +380,22 @@ def search_public_versions(title: str):
     )
 
 
-def add_selected_video(selection: str | None, videos: list[dict], catalog: SongIndex):
+def add_selected_video(
+    selection: str | None, videos: list[dict], catalog: SongIndex,
+    progress: gr.Progress = gr.Progress(),
+):
     if selection is None:
         raise gr.Error("Select a video from the search results first.")
     try:
         item = videos[int(selection)]
     except (TypeError, ValueError, IndexError) as exc:
         raise gr.Error("Selection has expired. Run the search again.") from exc
+    progress(0.05, desc="Preparing selected YouTube video…")
     return add_known_song(
         catalog, item["title"], f"Uploader: {item['channel']}", "youtube",
         lyric_title=lyric_title_for_result(item["title"], item.get("search_title", "")),
         fallback_youtube_url=item["url"],
+        progress=progress,
     )
 
 
