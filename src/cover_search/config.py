@@ -9,6 +9,7 @@ load_dotenv()
 @dataclass(frozen=True, slots=True)
 class Settings:
     provider: str = os.getenv("AI_PROVIDER", "local")
+    asr_engine: str = os.getenv("ASR_ENGINE", "parakeet")
     local_whisper_model: str = os.getenv("LOCAL_WHISPER_MODEL", "base")
     local_embedding_model: str = os.getenv(
         "LOCAL_EMBEDDING_MODEL",
