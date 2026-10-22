@@ -125,16 +125,16 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         "Parakeet CPU mode requires no API key."
     )
 
-    with gr.Tab("Build catalog"):
+    with gr.Tab("Add songs to catalog"):
         with gr.Row():
             with gr.Column():
-                gr.Markdown("### Upload audio")
-                add_file = gr.Audio(type="filepath", label="Audio file")
+                gr.Markdown("### Upload or record a song for the catalog")
+                add_file = gr.Audio(type="filepath", sources=["upload", "microphone"], label="Catalog audio (upload or record)")
                 add_title = gr.Textbox(label="Title")
                 add_artist = gr.Textbox(label="Artist")
                 add_file_button = gr.Button("Transcribe & index", variant="primary")
             with gr.Column():
-                gr.Markdown("### Optional YouTube source")
+                gr.Markdown("### Add a song from YouTube")
                 add_url = gr.Textbox(label="YouTube URL")
                 add_url_button = gr.Button("Download, transcribe & index")
 
@@ -162,7 +162,7 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
             outputs=[add_status, catalog_table, catalog_state, transcript_view],
         )
 
-    with gr.Tab("Search"):
+    with gr.Tab("Search by singing or audio"):
         top_k = gr.Slider(1, 10, value=5, step=1, label="Top results")
         results_table = gr.Dataframe(
             headers=["Rank", "Title", "Artist", "Similarity", "Source"],
@@ -172,8 +172,12 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         )
         with gr.Row():
             with gr.Column():
-                query_file = gr.Audio(type="filepath", label="Query audio")
-                search_file_button = gr.Button("Search from upload", variant="primary")
+                query_file = gr.Audio(
+                    type="filepath",
+                    sources=["upload", "microphone"],
+                    label="Sing, record or upload a fragment to search",
+                )
+                search_file_button = gr.Button("Find similar songs", variant="primary")
             with gr.Column():
                 query_url = gr.Textbox(label="Query YouTube URL")
                 search_url_button = gr.Button("Search from YouTube")
