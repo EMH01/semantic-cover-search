@@ -7,6 +7,7 @@ from cover_search.config import Settings
 from cover_search.index import SongIndex
 from cover_search.local import embed_local, transcribe_local
 from cover_search.models import Song
+from cover_search.parakeet import transcribe_parakeet
 from cover_search.services import embed_text, transcribe_audio
 from cover_search.youtube import download_audio
 
@@ -25,7 +26,11 @@ def transcribe(data: bytes, filename: str) -> str:
     if settings.provider not in {"local", "openai"}:
         raise gr.Error("AI_PROVIDER must be local or openai.")
     if settings.provider == "local":
-        return transcribe_local(data, filename, settings.local_whisper_model)
+        if settings.asr_engine == "parakeet":
+            return transcribe_parakeet(data, filename)
+        if settings.asr_engine == "whisper":
+            return transcribe_local(data, filename, settings.local_whisper_model)
+        raise gr.Error("ASR_ENGINE must be parakeet or whisper.")
     return transcribe_audio(get_client(), data, filename, settings.transcription_model)
 
 
@@ -115,7 +120,7 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
     gr.Markdown(
         "# 🎵 Semantic Cover Search\n"
         "Compare lyrical content through transcription and embeddings. "
-        "Local CPU mode requires no API key."
+        "Parakeet CPU mode requires no API key."
     )
 
     with gr.Tab("Build catalog"):
