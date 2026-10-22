@@ -31,7 +31,8 @@ flowchart LR
 ## Stack
 
 - Python 3.11+
-- Faster-Whisper (local CPU transcription, default `base`, int8)
+- NVIDIA Parakeet TDT 0.6B v3 via sherpa-onnx (default CPU speech recognition)
+- Faster-Whisper (comparison backend; CPU, `base`, int8)
 - Sentence Transformers (`paraphrase-multilingual-MiniLM-L12-v2`, CPU)
 - Optional OpenAI transcription and embeddings (requires a key)
 - FAISS
@@ -83,7 +84,8 @@ pip install -e ".[youtube,dev]"
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `AI_PROVIDER` | `local` by default; `openai` is optional | `local` |
+| `AI_PROVIDER` | Local inference by default; OpenAI is optional | `local` |
+| `ASR_ENGINE` | Local speech recognizer: `parakeet` or `whisper` | `parakeet` |
 | `LOCAL_WHISPER_MODEL` | Faster-Whisper model size | `base` |
 | `LOCAL_EMBEDDING_MODEL` | Multilingual sentence-transformer model | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
 | `OPENAI_API_KEY` | Needed only for the optional OpenAI provider | not required |
@@ -118,4 +120,10 @@ This implementation supersedes the earlier prototype and is the maintained versi
 
 ## Local inference limitations
 
-Faster-Whisper recognizes speech and lyrics acoustically, but results can be unreliable on dense music, instrumentals, and noisy recordings. Embeddings compare **transcribed language**, not musical structure; the similarity score is not a probability of two recordings being covers. First use loads two local models into RAM and CPU transcription may take time. The Gradio catalog is scoped to each browser session and is not persistent.
+Parakeet and Faster-Whisper recognize speech and lyrics acoustically, but results can be unreliable on dense music, instrumentals, and noisy recordings. Embeddings compare **transcribed language**, not musical structure; the similarity score is not a probability of two recordings being covers. First use loads two local models into RAM and CPU transcription may take time. The Gradio catalog is scoped to each browser session and is not persistent.
+
+## Default Parakeet speech recognition
+
+The default backend is NVIDIA **Parakeet TDT 0.6B v3**, served locally with **sherpa-onnx** using the converted INT8 ONNX model from [csukuangfj](https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8). Its approximate 670 MB model files are downloaded to the Hugging Face cache on first transcription; no API token or inference subscription is required. Audio is decoded to mono 16 kHz using PyAV.
+
+To compare with Faster-Whisper, configure `ASR_ENGINE=whisper` in your `.env` file and restart the app. The ASR engine does **not** compare melodies; songs are still retrieved by the meaning of the recognized lyrics. Windows inference and recognition of singing require real-device validation. Some sherpa-onnx Windows versions have been reported to return empty transcriptions with this architecture. The app raises an explicit error instead of inventing a result.
