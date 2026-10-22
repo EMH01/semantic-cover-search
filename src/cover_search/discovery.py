@@ -18,19 +18,27 @@ _last_request = 0.0
 
 
 def _fetch(path: str, params: dict[str, str | int]) -> dict:
-    """Respect MusicBrainz's one-request-per-second rule across threads."""
+    """Rate-limit attempts and retry temporary MusicBrainz failures."""
     global _last_request
+    retry_codes = {429, 500, 502, 503, 504}
     with _request_lock:
-        delay = max(0.0, 1.1 - (time.monotonic() - _last_request))
-        if delay:
-            time.sleep(delay)
-        try:
-            with httpx.Client(timeout=15, headers=HEADERS, follow_redirects=True) as client:
-                response = client.get(f"{BASE_URL}/{path}", params={**params, "fmt": "json"})
-                response.raise_for_status()
-                return response.json()
-        finally:
-            _last_request = time.monotonic()
+        with httpx.Client(timeout=15, headers=HEADERS, follow_redirects=True) as client:
+            for attempt in range(3):
+                delay = max(0.0, 1.1 - (time.monotonic() - _last_request))
+                if delay:
+                    time.sleep(delay)
+                try:
+                    response = client.get(
+                        f"{BASE_URL}/{path}", params={**params, "fmt": "json"}
+                    )
+                finally:
+                    _last_request = time.monotonic()
+                if response.status_code not in retry_codes or attempt == 2:
+                    response.raise_for_status()
+                    return response.json()
+                # Back off in addition to the regular per-attempt rate limit.
+                time.sleep(min(2 ** attempt, 4))
+    raise RuntimeError("MusicBrainz request failed after retries.")
 
 
 def find_works(title: str, limit: int = 8) -> list[dict]:
