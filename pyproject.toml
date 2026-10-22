@@ -34,3 +34,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+# Avoid inaccessible global Windows TEMP folders when using tmp_path fixtures.
+addopts = "--basetemp=.pytest_tmp"
