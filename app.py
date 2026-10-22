@@ -4,6 +4,7 @@ from pathlib import Path
 import gradio as gr
 
 from cover_search.config import Settings
+from cover_search.discovery import discover_versions
 from cover_search.index import SongIndex
 from cover_search.local import embed_local, transcribe_local
 from cover_search.models import Song
@@ -117,6 +118,28 @@ def search_youtube(url: str, top_k: int, catalog: SongIndex):
     return format_results(catalog.search(embedding, int(top_k)))
 
 
+def search_public_versions(title: str):
+    try:
+        works, recordings = discover_versions(title)
+    except (ValueError, Exception) as exc:
+        if isinstance(exc, ValueError):
+            raise gr.Error(str(exc)) from exc
+        raise gr.Error("MusicBrainz is unavailable. Please retry later.") from exc
+    if not works:
+        return "No matching musical work found.", []
+    work = works[0]
+    note = (
+        f"Recordings associated with **{work['title']}** in MusicBrainz. "
+        "Results are metadata links, not a verified ranking of covers. "
+        "Other works with the same title may exist."
+    )
+    rows = [
+        [record["title"], record["artist"], record["url"]]
+        for record in recordings
+    ]
+    return note, rows
+
+
 with gr.Blocks(title="Semantic Cover Search") as demo:
     catalog_state = gr.State(value=SongIndex)
     gr.Markdown(
@@ -125,7 +148,27 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         "Parakeet CPU mode requires no API key."
     )
 
-    with gr.Tab("Add songs to catalog"):
+    with gr.Tab("Discover versions by song title"):
+        gr.Markdown(
+            "Search online MusicBrainz metadata for performances of a composition. "
+            "No personal catalog or API key needed. This does not identify recordings from singing."
+        )
+        public_title = gr.Textbox(label="Song title", placeholder="e.g. Hallelujah")
+        public_search = gr.Button("Find recorded versions", variant="primary")
+        public_status = gr.Markdown()
+        public_results = gr.Dataframe(
+            headers=["Recording", "Artist", "MusicBrainz link"],
+            datatype=["str", "str", "str"],
+            interactive=False,
+            label="Recorded versions (MusicBrainz)",
+        )
+        public_search.click(
+            search_public_versions,
+            inputs=public_title,
+            outputs=[public_status, public_results],
+        )
+
+    with gr.Tab("Experimental local catalog"):
         with gr.Row():
             with gr.Column():
                 gr.Markdown("### Upload a song to the catalog")
@@ -163,7 +206,7 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
             outputs=[add_status, catalog_table, catalog_state, transcript_view],
         )
 
-    with gr.Tab("Search by singing or audio"):
+    with gr.Tab("Experimental singing search"):
         top_k = gr.Slider(1, 10, value=5, step=1, label="Top results")
         results_table = gr.Dataframe(
             headers=["Rank", "Title", "Artist", "Similarity", "Source"],
