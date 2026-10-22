@@ -4,6 +4,7 @@ Catalogs are shared by all sessions connected to the same local app instance.
 Store transcripts and embedding vectors, not original audio files.
 """
 import os
+from contextlib import closing
 import sqlite3
 from pathlib import Path
 
@@ -44,7 +45,7 @@ def store_song(song: Song, embedding: np.ndarray, path: Path | None = None) -> N
     """Commit a record atomically. Reject duplicates and malformed embeddings."""
     vec = SongIndex._prepare_vector(embedding).reshape(-1)
     target = path if path is not None else database_path()
-    with _connect(target) as conn:
+    with closing(_connect(target)) as conn, conn:
         try:
             conn.execute(
                 "INSERT INTO songs VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -61,7 +62,7 @@ def load_catalog(path: Path | None = None) -> SongIndex:
     """Recreate FAISS from saved vectors when the app/session starts."""
     target = path if path is not None else database_path()
     index = SongIndex()
-    with _connect(target) as conn:
+    with closing(_connect(target)) as conn:
         rows = conn.execute(
             "SELECT title, artist, transcript, source, embedding, dimensions "
             "FROM songs ORDER BY rowid"
