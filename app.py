@@ -4,13 +4,12 @@ from pathlib import Path
 import gradio as gr
 
 from cover_search.config import Settings
-from cover_search.discovery import discover_versions
 from cover_search.index import SongIndex
 from cover_search.local import embed_local, transcribe_local
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
 from cover_search.services import embed_text, transcribe_audio
-from cover_search.youtube import download_audio
+from cover_search.youtube import download_audio, search_youtube_videos
 
 settings = Settings()
 MAX_AUDIO_BYTES = 20 * 1024 * 1024
@@ -120,23 +119,21 @@ def search_youtube(url: str, top_k: int, catalog: SongIndex):
 
 def search_public_versions(title: str):
     try:
-        works, recordings = discover_versions(title)
+        videos = search_youtube_videos(title)
     except ValueError as exc:
         raise gr.Error(str(exc)) from exc
     except Exception as exc:
-        raise gr.Error("MusicBrainz is unavailable. Please retry later.") from exc
-    if not works:
-        return "No matching musical work found.", []
-    work = works[0]
+        raise gr.Error(
+            "YouTube search is temporarily unavailable. Check connectivity or yt-dlp."
+        ) from exc
+    if not videos:
+        return "No YouTube videos found for this search.", []
     note = (
-        f"Recordings associated with **{work['title']}** in MusicBrainz. "
-        "Results are metadata links, not a verified ranking of covers. "
-        "Other works with the same title may exist."
+        f"Showing {len(videos)} YouTube results for **{title.strip()} covers**. "
+        "The **Channel** is the video uploader, not necessarily the performing artist. "
+        "These are search candidates, not verified cover recordings."
     )
-    rows = [
-        [record["title"], record["artist"], record["url"]]
-        for record in recordings
-    ]
+    rows = [[item["title"], item["channel"], item["url"]] for item in videos]
     return note, rows
 
 
@@ -148,19 +145,20 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         "Parakeet CPU mode requires no API key."
     )
 
-    with gr.Tab("Discover versions by song title"):
+    with gr.Tab("Discover covers on YouTube"):
         gr.Markdown(
-            "Search online MusicBrainz metadata for performances of a composition. "
-            "No personal catalog or API key needed. This does not identify recordings from singing."
+            "Find cover video candidates on YouTube by song title. "
+            "Channels identify uploaders; verify the performers by opening each video. "
+            "No personal catalog or API key required."
         )
         public_title = gr.Textbox(label="Song title", placeholder="e.g. Hallelujah")
-        public_search = gr.Button("Find recorded versions", variant="primary")
+        public_search = gr.Button("Search covers on YouTube", variant="primary")
         public_status = gr.Markdown()
         public_results = gr.Dataframe(
-            headers=["Recording", "Artist", "MusicBrainz link"],
+            headers=["Video title", "YouTube channel", "Watch on YouTube"],
             datatype=["str", "str", "str"],
             interactive=False,
-            label="Recorded versions (MusicBrainz)",
+            label="YouTube search results",
         )
         public_search.click(
             search_public_versions,
