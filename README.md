@@ -1,8 +1,15 @@
 # Semantic Cover Search
 
-A semantic audio-search experiment for finding **songs with similar transcribed lyrics**.
+A research prototype combining online musical-work discovery with an experimental local audio-transcription and semantic-retrieval pipeline.
 
 This project evolved from an earlier cover-search experiment. The core idea is preserved—transcribe songs, embed the lyrics, and search by semantic similarity—but the implementation is now split into testable components while keeping YouTube extraction isolated in its own adapter.
+
+## Modes
+
+- **Discover versions by song title:** searches MusicBrainz for compositions and lists recordings linked to the best-matching work. No manual catalog, API key, audio upload or local model required. Results are metadata candidates, not verified covers. Works sharing a title may be ambiguous; only the top work is explored.
+- **Experimental local catalog and singing search:** transcribes recordings with local Parakeet, embeds the text and compares against recordings manually indexed in the same browser session. It **does not search the internet** or identify unknown songs by melody.
+
+MusicBrainz is free for non-commercial API use and requires an identifying User-Agent and at most one call per second. Its metadata does not supply song lyrics or audio.
 
 ## Pipeline
 
@@ -37,6 +44,7 @@ flowchart LR
 - Optional OpenAI transcription and embeddings (requires a key)
 - FAISS
 - Gradio
+- MusicBrainz public API (HTTPX)
 - `yt-dlp` (YouTube and YouTube Music adapter)
 
 ## Project structure
@@ -46,6 +54,7 @@ flowchart LR
 ├── app.py
 ├── src/cover_search/
 │   ├── config.py
+│   ├── discovery.py
 │   ├── index.py
 │   ├── local.py
 │   ├── parakeet.py
@@ -53,6 +62,7 @@ flowchart LR
 │   ├── services.py
 │   └── youtube.py
 ├── tests/
+│   ├── test_discovery.py
 │   ├── test_index.py
 │   ├── test_services.py
 │   ├── test_local.py
