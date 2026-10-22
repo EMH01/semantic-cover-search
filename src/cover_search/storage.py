@@ -3,9 +3,10 @@
 Catalogs are shared by all sessions connected to the same local app instance.
 Store transcripts and embedding vectors, not original audio files.
 """
+
 import os
-from contextlib import closing
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import numpy as np
