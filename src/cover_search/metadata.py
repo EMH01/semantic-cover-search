@@ -4,8 +4,10 @@ from pathlib import Path
 from mutagen import File as MutagenFile
 
 
-def audio_metadata(path: str) -> tuple[str, str]:
+def audio_metadata(path: str | None) -> tuple[str, str]:
     """Return an editable title and artist, falling back to the filename."""
+    if not path:
+        return "", ""
     source = Path(path)
     title = source.stem.strip() or "Untitled recording"
     artist = ""
