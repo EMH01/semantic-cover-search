@@ -219,7 +219,13 @@ def search_public_versions(title: str):
         (f"{i + 1}. {item['title']} — {item['channel']}", str(i))
         for i, item in enumerate(videos)
     ]
-    return note, render_video_cards(videos), videos, gr.update(choices=options, value=None)
+    return (
+        note,
+        render_video_cards(videos),
+        videos,
+        gr.update(choices=options, value=None, visible=bool(videos)),
+        gr.update(visible=bool(videos)),
+    )
 
 
 def add_selected_video(selection: str | None, videos: list[dict], catalog: SongIndex):
@@ -254,13 +260,23 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
             label="Choose a video to add to your local catalog",
             choices=[],
             interactive=True,
+            visible=False,
         )
-        add_selected_button = gr.Button("Add selected video to local catalog")
+        add_selected_button = gr.Button(
+            "Add selected video to local catalog", visible=False
+        )
         selected_status = gr.Markdown()
         public_search.click(
             search_public_versions,
             inputs=public_title,
-            outputs=[public_status, public_results, youtube_results_state, result_selection],
+            outputs=[
+                public_status,
+                public_results,
+                youtube_results_state,
+                result_selection,
+                add_selected_button,
+            ],
+            show_progress="minimal",
         )
 
     with gr.Tab("Local catalog"):
