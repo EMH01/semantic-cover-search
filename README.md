@@ -7,9 +7,15 @@ This project evolved from an earlier cover-search experiment. The core idea is p
 ## Modes
 
 - **Discover covers on YouTube:** searches YouTube video metadata for a title and the word "cover" using `yt-dlp`, returning video titles, uploader channels and direct watch links. No media is downloaded during search. You can choose a result and **Add selected video to local catalog**; that explicit action downloads, transcribes and indexes the chosen audio. Results remain unverified cover candidates and uploader names are not assumed to be performers.
-- **Experimental local catalog and singing search:** uses local Parakeet speech transcription, multilingual text embeddings and FAISS to compare against recordings indexed in a browser session. It does **not** identify unknown songs from the whole internet, and it does not compare melodies.
+- **Local catalog:** add uploaded audio, manual YouTube links, or selected discovery results. SQLite stores song metadata, transcript and embeddings and reconstructs the FAISS search index after restart. All sessions of the same app instance share this database. Original audio is not saved.\n- **Experimental singing search:** compares microphone recordings against the saved catalog. It does **not** identify unknown songs from the internet or compare melodies.
 
 YouTube search availability and metadata depend on the third-party service and the installed `yt-dlp` version. A JavaScript runtime may be needed for some YouTube extraction paths. MusicBrainz discovery code remains an experimental research module but is not used by the main search tab.
+
+## Persistent local data
+
+The SQLite database is created automatically at `.local_data/catalog.sqlite3` (ignored by Git). You can set `COVER_CATALOG_DB` to an alternative database path. Keep the database private: it contains text transcriptions, and all browser sessions connected to the same server share it. A public multi-user deployment would require authentication and per-user storage. No files are uploaded to GitHub.
+
+An existing session-only catalog from an earlier version cannot be restored retroactively; songs added after this update will persist.
 
 ## Pipeline
 
@@ -59,6 +65,7 @@ flowchart LR
 │   ├── local.py
 │   ├── parakeet.py
 │   ├── models.py
+│   ├── storage.py
 │   ├── services.py
 │   └── youtube.py
 ├── tests/
