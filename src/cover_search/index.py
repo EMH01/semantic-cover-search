@@ -1,6 +1,7 @@
 import faiss
 import numpy as np
 
+from .comparison import LyricComparison, compare_all_lyrics
 from .models import Song
 
 
@@ -11,6 +12,7 @@ class SongIndex:
         self._index: faiss.IndexFlatIP | None = None
         self._songs: list[Song] = []
         self._indexed_songs: list[Song] = []
+        self._vectors: list[np.ndarray] = []
 
     @property
     def songs(self) -> tuple[Song, ...]:
@@ -34,6 +36,7 @@ class SongIndex:
                 raise ValueError("Embedding dimension does not match the existing index.")
             self._index.add(vector)
             self._indexed_songs.append(song)
+            self._vectors.append(vector.reshape(-1).copy())
         self._songs.append(song)
 
     def search(self, embedding: np.ndarray, top_k: int = 5) -> list[tuple[Song, float]]:
@@ -50,6 +53,10 @@ class SongIndex:
             for index, score in zip(indices[0], scores[0], strict=True)
             if index >= 0
         ]
+
+    def compare_all(self) -> list[LyricComparison]:
+        """Rank all unique pairs that have text embeddings, excluding metadata-only."""
+        return compare_all_lyrics(self._indexed_songs, self._vectors)
 
     @staticmethod
     def _prepare_vector(embedding: np.ndarray) -> np.ndarray:
