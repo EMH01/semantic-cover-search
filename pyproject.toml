@@ -18,11 +18,11 @@ dependencies = [
   "gradio>=5.0",
   "numpy>=1.26",
   "python-dotenv>=1.0",
+  "yt-dlp>=2025.1",
 ]
 
 [project.optional-dependencies]
 openai = ["openai>=1.68"]
-youtube = ["yt-dlp>=2025.1"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [tool.hatch.build.targets.wheel]
