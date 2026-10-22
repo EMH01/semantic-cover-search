@@ -229,7 +229,12 @@ def add_selected_video(selection: str | None, videos: list[dict], catalog: SongI
         raise gr.Error("Selection has expired. Run the search again.") from exc
     return add_known_song(
         catalog, item["title"], f"Uploader: {item['channel']}", "youtube",
-        lyric_title=title_from_video(item["title"]),
+        lyric_title=(
+            item["search_title"]
+            if item.get("search_title")
+            and item["search_title"].strip().casefold() in item["title"].casefold()
+            else title_from_video(item["title"])
+        ),
     )
 
 
