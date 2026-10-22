@@ -33,7 +33,12 @@ def title_from_video(video_title: str) -> str:
     if len(parts) == 2:
         title = parts[1]
     title = re.sub(r"\s*[\[(].*?[\])]", "", title).strip()
-    title = re.sub(\n        r"\\b(official music video|lyric video|cover version|acoustic cover|cover)\\b.*$",\n        "", title, flags=re.I,\n    ).strip(" -–—")
+    title = re.sub(
+        r"\b(official music video|lyric video|cover version|acoustic cover|cover)\b.*$",
+        "",
+        title,
+        flags=re.I,
+    ).strip(" -–—")
     return title or video_title.strip()
 
 
