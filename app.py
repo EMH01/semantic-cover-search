@@ -8,7 +8,13 @@ import gradio as gr
 from cover_search.config import Settings
 from cover_search.index import SongIndex
 from cover_search.local import embed_local, transcribe_local
-from cover_search.lyrics import find_lyrics, lyric_title_for_result, title_from_video
+from cover_search.lyrics import (
+    LyricsLookupError,
+    find_lyrics,
+    lyric_title_for_result,
+    render_lyrics,
+    title_from_video,
+)
 from cover_search.metadata import audio_metadata
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
@@ -86,18 +92,19 @@ def add_known_song(
         )
     requested_lyrics_title = (lyric_title or title).strip()
     match = None
-    problem = ""
+    lookup_error = ""
     try:
         match = find_lyrics(requested_lyrics_title, lyric_artist)
-    except Exception:
-        problem = " The lyric service is temporarily unavailable."
+    except LyricsLookupError as exc:
+        lookup_error = str(exc)
     lyrics = match.text if match else ""
     vector = None
+    index_error = False
     if lyrics:
         try:
             vector = embed(lyrics)
         except Exception:
-            problem += " Lyrics were found but semantic indexing was unavailable."
+            index_error = True
             lyrics = ""
     song = Song(title, artist, lyrics, source=source)
     try:
@@ -106,21 +113,29 @@ def add_known_song(
         raise gr.Error(str(exc)) from exc
 
     status = f"**Added to local catalog:** {escape(song.label)}."
-    if lyrics and match:
+    if match is not None and vector is not None:
         status += (
             f" Lyrics matched against **{escape(match.title)} — "
             f"{escape(match.reference_artist)}** "
-            f"([LRCLIB source]({match.url}))."
-            " Cover performances can have different verses."
+            f"([LRCLIB source]({match.url})). "
+            "The reference may differ from this performance."
+        )
+    elif match is not None and index_error:
+        status += (
+            " Reference lyrics were found, but semantic indexing is unavailable. "
+            "This entry is metadata-only."
+        )
+    elif lookup_error:
+        status += (
+            f" **Lyrics service problem:** {escape(lookup_error)} "
+            "The song was added as metadata-only."
         )
     else:
         status += (
-            f" Lyrics lookup for **{escape(requested_lyrics_title)}** did not produce "
-            "an exact usable match; this entry is metadata-only and cannot "
-            "be retrieved by lyric similarity yet."
+            f" No exact LRCLIB lyrics match for **{escape(requested_lyrics_title)}**. "
+            "The entry is metadata-only."
         )
-    return status + problem, catalog_rows(catalog), catalog, lyrics
-
+    return status, catalog_rows(catalog), catalog, render_lyrics(match)
 
 def add_upload(audio_path: str | None, title: str, artist: str, catalog: SongIndex):
     if not audio_path:
@@ -305,13 +320,8 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
                 add_url_button = gr.Button("Add link to catalog")
 
         add_status = gr.Markdown()
-        with gr.Accordion("Latest lyrics match (LRCLIB)", open=False):
-            lyrics_view = gr.Textbox(
-                label="Reference lyrics (may differ from a cover)",
-                lines=8,
-                max_lines=12,
-                interactive=False,
-            )
+        with gr.Accordion("Reference lyrics · latest match (LRCLIB)", open=False):
+            lyrics_view = gr.HTML(value=render_lyrics(None))
         catalog_table = gr.Dataframe(
             headers=["Title", "Performer / uploader", "Source", "Searchable"],
             datatype=["str", "str", "str", "str"],
