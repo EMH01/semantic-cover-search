@@ -14,6 +14,7 @@ def test_search_youtube_videos_uses_video_metadata_without_download():
                 "channel": "Test Performer",
             },
             {"id": "XYZ456abc", "title": "Hallelujah", "uploader": "Other Uploader"},
+            {"id": "TUTORIAL", "title": "Hallelujah how to cover tutorial", "channel": "Tutor"},
         ]
     }
 
@@ -37,6 +38,7 @@ def test_search_youtube_videos_uses_video_metadata_without_download():
     assert videos[0]["channel"] == "Test Performer"
     assert videos[0]["url"] == "https://www.youtube.com/watch?v=ABC123xyz"
     assert videos[1]["channel"] == "Other Uploader"
+    assert len(videos) == 2
 
 
 def test_youtube_video_search_rejects_empty_query():
