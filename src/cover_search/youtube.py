@@ -95,14 +95,18 @@ def search_youtube_videos(title: str, limit: int = 12) -> list[dict[str, str]]:
     with yt_dlp.YoutubeDL(options) as ydl:
         result = ydl.extract_info(f"ytsearch{count}:{title} cover", download=False)
     videos = []
+    tutorial_terms = ("how to", "tutorial", "lesson", "reaction", "karaoke", "instrumental")
     for item in (result or {}).get("entries") or []:
         if not item:
             continue
         video_id = item.get("id")
         if not video_id or not isinstance(video_id, str):
             continue
+        video_title = str(item.get("title") or "Untitled")
+        if any(term in video_title.casefold() for term in tutorial_terms):
+            continue
         videos.append({
-            "title": str(item.get("title") or "Untitled"),
+            "title": video_title,
             "channel": str(item.get("channel") or item.get("uploader") or "Unknown channel"),
             "url": f"https://www.youtube.com/watch?v={video_id}",
         })
