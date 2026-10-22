@@ -195,7 +195,7 @@ def render_lyrics(match: LyricsMatch | None) -> str:
         "Lyrics from LRCLIB; a cover may use different verses. "
         f'<a href="{url}" target="_blank" rel="noopener noreferrer">View source ↗</a>'
         "</p>"
-        f'<div style="overflow-y:auto;max-height:450px;'
-        f'border-top:1px solid var(--border-color-primary);'
+        '<div style="overflow-y:auto;max-height:450px;'
+        'border-top:1px solid var(--border-color-primary);'
         f'padding:18px 4px;">{formatted}</div></section>'
     )
