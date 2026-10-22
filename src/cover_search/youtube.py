@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlparse
 
@@ -74,18 +75,10 @@ def download_audio(url: str) -> YouTubeAudio:
             )
 
 
-def search_youtube_videos(title: str, limit: int = 12) -> list[dict[str, str]]:
-    """Discover YouTube video candidates without downloading media.
-
-    The channel/uploader is not necessarily the musical performer.
-    Search results are not verified cover recordings.
-    """
+def _youtube_search(query: str, count: int) -> list[dict[str, str]]:
+    """Get flat video metadata, never downloading audio during discovery."""
     import yt_dlp
 
-    title = " ".join(title.split())
-    if not 2 <= len(title) <= 100:
-        raise ValueError("Enter a song title between 2 and 100 characters.")
-    count = min(max(int(limit), 1), 20)
     options = {
         "quiet": True,
         "no_warnings": True,
@@ -95,7 +88,7 @@ def search_youtube_videos(title: str, limit: int = 12) -> list[dict[str, str]]:
         "socket_timeout": 12,
     }
     with yt_dlp.YoutubeDL(options) as ydl:
-        result = ydl.extract_info(f"ytsearch{count}:{title} cover", download=False)
+        result = ydl.extract_info(f"ytsearch{count}:{query}", download=False)
     videos = []
     tutorial_terms = ("how to", "tutorial", "lesson", "reaction", "karaoke", "instrumental")
     for item in (result or {}).get("entries") or []:
@@ -113,6 +106,33 @@ def search_youtube_videos(title: str, limit: int = 12) -> list[dict[str, str]]:
             "url": f"https://www.youtube.com/watch?v={video_id}",
         })
     return videos
+
+
+def search_youtube_videos(title: str, limit: int = 12) -> list[dict[str, str]]:
+    """Search YouTube by known song title and 'cover' (unverified candidates)."""
+    title = " ".join(title.split())
+    if not 2 <= len(title) <= 100:
+        raise ValueError("Enter a song title between 2 and 100 characters.")
+    count = min(max(int(limit), 1), 20)
+    return _youtube_search(f"{title} cover", count)
+
+
+def search_youtube_lyrics_fragment(
+    transcript: str, limit: int = 12
+) -> list[dict[str, str]]:
+    """Search metadata for a recognized lyrical phrase, not melodic recognition.
+
+    A result is just a YouTube query candidate; it is not a confirmed song ID.
+    """
+    words = re.findall(r"[\w']+", transcript, flags=re.UNICODE)
+    if len(words) < 4:
+        raise ValueError(
+            "At least four recognizable words are needed for a lyrics-based search."
+        )
+    count = min(max(int(limit), 1), 20)
+    # Avoid overlong or arbitrary model output as a search query.
+    phrase = " ".join(words[:12])[:150].strip()
+    return _youtube_search(f'"{phrase}" lyrics', count)
 
 
 def video_metadata(url: str) -> dict[str, str]:
