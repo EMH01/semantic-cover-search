@@ -66,8 +66,9 @@ def find_lyrics(title: str, artist: str = "") -> LyricsMatch | None:
             item for item in candidates
             if normalized(str(item.get("artistName") or "")) == normalized(artist)
         ]
-        if matching:
-            candidates = matching
+        if not matching:
+            return None
+        candidates = matching
     item = candidates[0]
     return LyricsMatch(
         title=str(item.get("trackName") or query),
