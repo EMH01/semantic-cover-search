@@ -160,7 +160,7 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         add_url_button.click(
             add_youtube,
             inputs=[add_url, catalog_state],
-            outputs=[add_status, catalog_table, catalog_state],
+            outputs=[add_status, catalog_table, catalog_state, transcript_view],
         )
 
     with gr.Tab("Search"):
