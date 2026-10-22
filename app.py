@@ -595,19 +595,31 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
             show_progress="minimal",
         )
         add_selected_button.click(
+            processing_status, inputs=None, outputs=selected_status,
+            queue=False, show_progress="hidden",
+        ).then(
             add_selected_video,
             inputs=[result_selection, youtube_results_state, catalog_state],
             outputs=[selected_status, catalog_table, catalog_state, lyrics_view],
+            show_progress="minimal",
         )
         add_file_button.click(
+            processing_status, inputs=None, outputs=add_status,
+            queue=False, show_progress="hidden",
+        ).then(
             add_upload,
             inputs=[add_file, add_title, add_artist, catalog_state],
             outputs=[add_status, catalog_table, catalog_state, lyrics_view],
+            show_progress="minimal",
         )
         add_url_button.click(
+            processing_status, inputs=None, outputs=add_status,
+            queue=False, show_progress="hidden",
+        ).then(
             add_youtube,
             inputs=[add_url, catalog_state],
             outputs=[add_status, catalog_table, catalog_state, lyrics_view],
+            show_progress="minimal",
         )
 
 
