@@ -13,13 +13,14 @@ from cover_search.lyrics import (
     find_lyrics,
     lyric_title_for_result,
     render_lyrics,
+    render_transcription,
     title_from_video,
 )
 from cover_search.metadata import audio_metadata
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
 from cover_search.services import embed_text, transcribe_audio
-from cover_search.youtube import search_youtube_videos, video_metadata
+from cover_search.youtube import download_audio, search_youtube_videos, video_metadata
 
 settings = Settings()
 MAX_AUDIO_BYTES = 20 * 1024 * 1024
@@ -64,8 +65,13 @@ def get_client():
 
 
 def catalog_rows(catalog: SongIndex) -> list[list[str]]:
+    names = {
+        "lrclib": "Reference lyrics (LRCLIB)",
+        "asr": "Automatic transcription",
+        "none": "Metadata only",
+    }
     return [
-        [song.title, song.artist, song.source, "Lyrics" if song.transcript else "Metadata only"]
+        [song.title, song.artist, song.source, names.get(song.text_origin, "Metadata only")]
         for song in catalog.songs
     ]
 
@@ -77,8 +83,10 @@ def add_known_song(
     source: str,
     lyric_title: str | None = None,
     lyric_artist: str = "",
+    fallback_audio_path: str | None = None,
+    fallback_youtube_url: str | None = None,
 ) -> tuple[str, list[list[str]], SongIndex, str]:
-    """Add metadata, optionally finding lyrics. Never download/transcribe full songs."""
+    """Try reference lyrics first, then speech recognition for unavailable lyrics."""
     title = title.strip() or "Untitled recording"
     artist = artist.strip() or "Unknown performer"
     if any(
@@ -88,54 +96,86 @@ def add_known_song(
     ):
         return (
             f"**Already in local catalog:** {escape(title)} — {escape(artist)}.",
-            catalog_rows(catalog), catalog, "",
+            catalog_rows(catalog),
+            catalog,
+            render_transcription(None, "This song is already in the catalog."),
         )
-    requested_lyrics_title = (lyric_title or title).strip()
+
+    requested_title = (lyric_title or title).strip()
     match = None
     lookup_error = ""
     try:
-        match = find_lyrics(requested_lyrics_title, lyric_artist)
+        match = find_lyrics(requested_title, lyric_artist)
     except LyricsLookupError as exc:
         lookup_error = str(exc)
-    lyrics = match.text if match else ""
-    vector = None
-    index_error = False
-    if lyrics:
+
+    text = match.text if match else ""
+    origin = "lrclib" if text else "none"
+    fallback_error = ""
+    if not text and (fallback_audio_path or fallback_youtube_url):
         try:
-            vector = embed(lyrics)
+            if fallback_audio_path:
+                file = Path(fallback_audio_path)
+                audio_bytes, audio_name = read_audio(str(file)), file.name
+            else:
+                # yt-dlp enforces duration and file-size bounds.
+                audio = download_audio(fallback_youtube_url)
+                audio_bytes, audio_name = audio.data, audio.filename
+            text = transcribe(audio_bytes, audio_name).strip()
+            if not text:
+                raise ValueError("The speech recognizer did not detect any words.")
+            origin = "asr"
+        except Exception as exc:
+            # A poor recording or missing YouTube format must not prevent saving metadata.
+            fallback_error = type(exc).__name__
+            text = ""
+
+    embedding = None
+    index_error = False
+    if text:
+        try:
+            embedding = embed(text)
         except Exception:
             index_error = True
-            lyrics = ""
-    song = Song(title, artist, lyrics, source=source)
+            text = ""
+    if embedding is None:
+        origin = "none"
+
+    song = Song(title, artist, text, source=source, text_origin=origin)
     try:
-        catalog.add(song, vector)
+        catalog.add(song, embedding)
     except ValueError as exc:
         raise gr.Error(str(exc)) from exc
 
     status = f"**Added to local catalog:** {escape(song.label)}."
-    if match is not None and vector is not None:
+    if origin == "lrclib" and match is not None:
         status += (
-            f" Lyrics matched against **{escape(match.title)} — "
+            f" Reference lyrics: **{escape(match.title)} — "
             f"{escape(match.reference_artist)}** "
             f"([LRCLIB source]({match.url})). "
-            "The reference may differ from this performance."
+            "The recording may use different verses."
         )
-    elif match is not None and index_error:
+        view = render_lyrics(match)
+    elif origin == "asr":
         status += (
-            " Reference lyrics were found, but semantic indexing is unavailable. "
-            "This entry is metadata-only."
+            " LRCLIB did not supply usable lyrics, so the audio was transcribed "
+            "automatically and indexed. Singing recognition may be inaccurate."
         )
-    elif lookup_error:
-        status += (
-            f" **Lyrics service problem:** {escape(lookup_error)} "
-            "The song was added as metadata-only."
-        )
+        view = render_transcription(text)
     else:
-        status += (
-            f" No exact LRCLIB lyrics match for **{escape(requested_lyrics_title)}**. "
-            "The entry is metadata-only."
-        )
-    return status, catalog_rows(catalog), catalog, render_lyrics(match)
+        status += " No searchable text was obtained; saved as **metadata only**."
+        if index_error:
+            status += " Text was obtained, but vector indexing failed."
+        elif fallback_error:
+            status += (
+                " Audio download or speech recognition failed "
+                f"({escape(fallback_error)})."
+            )
+        view = render_transcription(None)
+
+    if lookup_error:
+        status += f" LRCLIB issue: {escape(lookup_error)}"
+    return status, catalog_rows(catalog), catalog, view
 
 def add_upload(audio_path: str | None, title: str, artist: str, catalog: SongIndex):
     if not audio_path:
@@ -149,6 +189,7 @@ def add_upload(audio_path: str | None, title: str, artist: str, catalog: SongInd
     return add_known_song(
         catalog, title or detected_title, artist or detected_artist, "upload",
         lyric_artist=artist or detected_artist,
+        fallback_audio_path=audio_path,
     )
 
 
@@ -164,6 +205,7 @@ def add_youtube(url: str, catalog: SongIndex):
     return add_known_song(
         catalog, video["title"], f"Uploader: {video['channel']}", "youtube",
         lyric_title=title_from_video(video["title"]),
+        fallback_youtube_url=video["url"],
     )
 
 
@@ -253,6 +295,7 @@ def add_selected_video(selection: str | None, videos: list[dict], catalog: SongI
     return add_known_song(
         catalog, item["title"], f"Uploader: {item['channel']}", "youtube",
         lyric_title=lyric_title_for_result(item["title"], item.get("search_title", "")),
+        fallback_youtube_url=item["url"],
     )
 
 
@@ -296,13 +339,13 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
 
     with gr.Tab("Local catalog"):
         gr.Markdown(
-            "Session-only catalog: titles and references are kept until Gradio restarts. "
-            "Known songs use online lyrics when available; full-song transcription "
-            "and audio downloads are not required to add a song."
+            "Session-only catalog: first look for reference lyrics online. "
+            "If unavailable, try audio transcription (which may require a "
+            "bounded YouTube download). Data resets when Gradio restarts."
         )
         with gr.Row():
             with gr.Column():
-                gr.Markdown("### Upload audio metadata")
+                gr.Markdown("### Upload a song")
                 add_file = gr.Audio(
                     type="filepath", sources=["upload"], label="Audio file to add"
                 )
@@ -320,8 +363,8 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
                 add_url_button = gr.Button("Add link to catalog")
 
         add_status = gr.Markdown()
-        with gr.Accordion("Reference lyrics · latest match (LRCLIB)", open=False):
-            lyrics_view = gr.HTML(value=render_lyrics(None))
+        with gr.Accordion("Lyrics or automatic transcription · latest song", open=False):
+            lyrics_view = gr.HTML(value=render_transcription(None))
         catalog_table = gr.Dataframe(
             headers=["Title", "Performer / uploader", "Source", "Searchable"],
             datatype=["str", "str", "str", "str"],
