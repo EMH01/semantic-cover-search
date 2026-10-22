@@ -42,8 +42,6 @@ def test_discover_versions_returns_empty_when_no_work_found():
 
 
 def test_musicbrainz_temporary_503_is_retried(monkeypatch):
-    from types import SimpleNamespace
-
     import httpx
 
     from cover_search import discovery
@@ -57,7 +55,11 @@ def test_musicbrainz_temporary_503_is_retried(monkeypatch):
         def raise_for_status(self):
             if self.status_code >= 400:
                 request = httpx.Request("GET", "https://musicbrainz.org/ws/2/work")
-                raise httpx.HTTPStatusError("Unavailable", request=request, response=httpx.Response(self.status_code, request=request))
+                raise httpx.HTTPStatusError(
+                    "Unavailable",
+                    request=request,
+                    response=httpx.Response(self.status_code, request=request),
+                )
 
         def json(self):
             return {"works": []}
