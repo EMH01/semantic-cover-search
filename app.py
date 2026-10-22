@@ -220,6 +220,72 @@ def format_results(results):
     ]
 
 
+def render_lyric_comparison_cards(comparisons) -> str:
+    """Mobile-friendly cards showing distinct lexical and semantic measures."""
+    if not comparisons:
+        return '<p style="opacity:.75;">No song pairs are available to compare.</p>'
+    cards = []
+    for rank, pair in enumerate(comparisons, start=1):
+        left = escape(pair.first.label)
+        right = escape(pair.second.label)
+        overlap = pair.phrase_overlap * 100
+        # Cosine is not a calibrated probability; do not imply match likelihood.
+        semantic = pair.semantic_similarity * 100
+        first_source = "LRCLIB" if pair.first.text_origin == "lrclib" else "ASR"
+        second_source = "LRCLIB" if pair.second.text_origin == "lrclib" else "ASR"
+        qualifier = (
+            '<p style="font-size:.85em;margin:8px 0 0;opacity:.78;">'
+            "Identical indexed text, not proof of identical performances.</p>"
+            if pair.exact_text else ""
+        )
+        cards.append(
+            '<article style="padding:16px;margin:12px 0;border:1px solid '
+            'var(--border-color-primary);border-radius:12px;">'
+            f'<div style="font-size:.85em;opacity:.7;margin-bottom:8px;">Pair {rank}</div>'
+            f'<div style="font-weight:600;overflow-wrap:anywhere;">{left}</div>'
+            f'<div style="opacity:.65;font-size:.85em;">Text: {first_source}</div>'
+            '<div style="text-align:center;opacity:.6;margin:6px 0;">↕</div>'
+            f'<div style="font-weight:600;overflow-wrap:anywhere;">{right}</div>'
+            f'<div style="opacity:.65;font-size:.85em;">Text: {second_source}</div>'
+            '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;">'
+            '<div style="padding:9px 12px;border:1px solid var(--border-color-primary);'
+            'border-radius:8px;min-width:160px;">'
+            '<div style="font-size:.8em;opacity:.7;">Shared lyric phrases</div>'
+            f'<strong>{overlap:.1f}%</strong></div>'
+            '<div style="padding:9px 12px;border:1px solid var(--border-color-primary);'
+            'border-radius:8px;min-width:160px;">'
+            '<div style="font-size:.8em;opacity:.7;">Embedding cosine × 100</div>'
+            f'<strong>{semantic:.1f}</strong></div></div>{qualifier}</article>'
+        )
+    return "".join(cards)
+
+
+def compare_catalog_lyrics(catalog: SongIndex, top_pairs: int):
+    """Evaluate every eligible pair; render only the best N to avoid long screens."""
+    total = len(catalog.songs)
+    eligible = catalog.indexed_count
+    excluded = total - eligible
+    pairs = catalog.compare_all()
+    if not pairs:
+        return (
+            f"**{eligible} of {total} songs have searchable text.** "
+            "Add at least two songs with reference lyrics or automatic transcription "
+            "to compare them. Songs without text are excluded.",
+            render_lyric_comparison_cards([]),
+        )
+    displayed = pairs[:max(1, min(int(top_pairs), 50))]
+    note = (
+        f"**Compared all {len(pairs)} unique song pairs** among {eligible} songs with "
+        f"lyrics/transcriptions. Showing the top {len(displayed)} pairs. "
+        f"**{excluded} metadata-only songs excluded.** Sorted by shared word "
+        "sequences, then embedding cosine. Overlap uses three-word sequences "
+        "(Jaccard); cosine measures text-embedding similarity, not probability "
+        "of being a cover. Reference lyrics may be identical across versions "
+        "even when their actual performances differ."
+    )
+    return note, render_lyric_comparison_cards(displayed)
+
+
 def search_upload(audio_path: str | None, top_k: int, catalog: SongIndex):
     if not audio_path:
         raise gr.Error("Record a short fragment first.")
@@ -374,6 +440,27 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
             datatype=["str", "str", "str", "str"],
             interactive=False,
             label="Session catalog",
+        )
+        gr.Markdown("### Find songs with similar lyrics")
+        gr.Markdown(
+            "Compare **all songs in your local catalog** that have lyrics or an "
+            "automatic transcription. This uses cached text embeddings and shared "
+            "word sequences; it does not download audio or recognize melodies."
+        )
+        comparison_top = gr.Slider(
+            minimum=1, maximum=50, value=10, step=1, label="Show top song pairs"
+        )
+        compare_button = gr.Button("Compare all catalog lyrics", variant="primary")
+        comparison_status = gr.Markdown()
+        comparison_results = gr.HTML(
+            value='<p style="opacity:.75;">Add at least two songs, then compare.</p>',
+            label="Similar lyrics across songs",
+        )
+        compare_button.click(
+            compare_catalog_lyrics,
+            inputs=[catalog_state, comparison_top],
+            outputs=[comparison_status, comparison_results],
+            show_progress="minimal",
         )
         add_selected_button.click(
             add_selected_video,
