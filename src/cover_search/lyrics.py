@@ -42,6 +42,18 @@ def title_from_video(video_title: str) -> str:
     return title or video_title.strip()
 
 
+def lyric_title_for_result(video_title: str, searched_title: str = "") -> str:
+    """Prefer a user-confirmed song name when present in the discovered video title.
+
+    The uploader/video title is not reliable evidence of the musical work.
+    """
+    name = normalized(searched_title)
+    video_name = normalized(video_title)
+    if name and f" {name} " in f" {video_name} ":
+        return searched_title.strip()
+    return title_from_video(video_title)
+
+
 def find_lyrics(title: str, artist: str = "") -> LyricsMatch | None:
     """Return only an exact title match; prefer matching the supplied artist.
 
