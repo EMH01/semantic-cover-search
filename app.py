@@ -144,7 +144,6 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
             lines=6,
             max_lines=14,
             interactive=False,
-            show_copy_button=True,
         )
         catalog_table = gr.Dataframe(
             headers=["Title", "Artist", "Source"],
