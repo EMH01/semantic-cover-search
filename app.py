@@ -121,9 +121,9 @@ def search_youtube(url: str, top_k: int, catalog: SongIndex):
 def search_public_versions(title: str):
     try:
         works, recordings = discover_versions(title)
-    except (ValueError, Exception) as exc:
-        if isinstance(exc, ValueError):
-            raise gr.Error(str(exc)) from exc
+    except ValueError as exc:
+        raise gr.Error(str(exc)) from exc
+    except Exception as exc:
         raise gr.Error("MusicBrainz is unavailable. Please retry later.") from exc
     if not works:
         return "No matching musical work found.", []
