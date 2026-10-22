@@ -46,3 +46,12 @@ def test_duplicates_ignore_case():
     index.add(Song("Song", "Artist", "words"), np.array([1.0, 0.0]))
     with pytest.raises(ValueError, match="already indexed"):
         index.add(Song("SONG", "artist", "words"), np.array([0.0, 1.0]))
+
+
+def test_metadata_only_entry_is_not_searched():
+    index = SongIndex()
+    index.add(Song("Unknown", "Unknown performer", "", source="upload"))
+    index.add(Song("Known", "Artist", "lyrics", source="youtube"), np.array([1.0, 0.0]))
+    assert len(index.songs) == 2
+    assert index.indexed_count == 1
+    assert [song.title for song, _ in index.search(np.array([1.0, 0.0]))] == ["Known"]
