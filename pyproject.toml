@@ -18,6 +18,7 @@ dependencies = [
   "gradio>=5.0",
   "numpy>=1.26",
   "python-dotenv>=1.0",
+  "mutagen>=1.47",
   "yt-dlp>=2025.1",
 ]
 
