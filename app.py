@@ -135,7 +135,6 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
                 gr.Markdown("### Optional YouTube source")
                 add_url = gr.Textbox(label="YouTube URL")
                 add_url_button = gr.Button("Download, transcribe & index")
-                gr.Markdown('Requires the optional extra: `pip install -e ".[youtube]"`.')
 
         add_status = gr.Markdown()
         catalog_table = gr.Dataframe(
