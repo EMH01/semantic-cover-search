@@ -30,7 +30,7 @@ def validate_youtube_url(url: str) -> str:
 
 
 def download_audio(url: str) -> YouTubeAudio:
-    """Download a bounded audio source using the optional yt-dlp adapter."""
+    """Download a bounded audio source using yt-dlp."""
     url = validate_youtube_url(url)
     try:
         import yt_dlp
@@ -70,3 +70,40 @@ def download_audio(url: str) -> YouTubeAudio:
                 filename=path.name,
                 data=path.read_bytes(),
             )
+
+
+def search_youtube_videos(title: str, limit: int = 12) -> list[dict[str, str]]:
+    """Discover YouTube video candidates without downloading media.
+
+    The channel/uploader is not necessarily the musical performer.
+    Search results are not verified cover recordings.
+    """
+    import yt_dlp
+
+    title = " ".join(title.split())
+    if not 2 <= len(title) <= 100:
+        raise ValueError("Enter a song title between 2 and 100 characters.")
+    count = min(max(int(limit), 1), 20)
+    options = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": True,
+        "noplaylist": True,
+        "socket_timeout": 12,
+    }
+    with yt_dlp.YoutubeDL(options) as ydl:
+        result = ydl.extract_info(f"ytsearch{count}:{title} cover", download=False)
+    videos = []
+    for item in (result or {}).get("entries") or []:
+        if not item:
+            continue
+        video_id = item.get("id")
+        if not video_id or not isinstance(video_id, str):
+            continue
+        videos.append({
+            "title": str(item.get("title") or "Untitled"),
+            "channel": str(item.get("channel") or item.get("uploader") or "Unknown channel"),
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+        })
+    return videos
