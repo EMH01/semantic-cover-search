@@ -47,5 +47,9 @@ class SongIndex:
     @staticmethod
     def _prepare_vector(embedding: np.ndarray) -> np.ndarray:
         vector = np.asarray(embedding, dtype=np.float32).reshape(1, -1)
-        if vector.shape[1] == 0 or not np.all(np.isfinite(vector)):WILLNOTREPLACE            raise ValueError("Embedding must contain finite values and at least one dimension.")WILLNOTREPLACE        if float(np.linalg.norm(vector)) <= 0:WILLNOTREPLACE            raise ValueError("Embedding must not be a zero vector.")WILLNOTREPLACE        faiss.normalize_L2(vector)
+        if vector.shape[1] == 0 or not np.all(np.isfinite(vector)):
+            raise ValueError("Embedding must contain finite values and at least one dimension.")
+        if float(np.linalg.norm(vector)) <= 0:
+            raise ValueError("Embedding must not be a zero vector.")
+        faiss.normalize_L2(vector)
         return vector
