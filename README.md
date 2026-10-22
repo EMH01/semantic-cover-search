@@ -1,8 +1,8 @@
 # Semantic Cover Search
 
-A semantic audio-search experiment for finding **songs with similar transcribed lyrics** from their transcribed content.
+A semantic audio-search experiment for finding **songs with similar transcribed lyrics**.
 
-This project evolved from an earlier cover-search experiment. The core idea is preserved—transcribe songs, embed the lyrics, and search by semantic similarity—but the implementation is now split into testable components and no longer makes YouTube a hard dependency.
+This project evolved from an earlier cover-search experiment. The core idea is preserved—transcribe songs, embed the lyrics, and search by semantic similarity—but the implementation is now split into testable components while keeping YouTube extraction isolated in its own adapter.
 
 ## Pipeline
 
@@ -22,7 +22,7 @@ flowchart LR
 ## What changed from the original experiment
 
 - **Stable primary input:** uploaded audio works independently of YouTube.
-- **Optional YouTube adapter:** `yt-dlp` is isolated behind an optional dependency because third-party extraction behavior changes over time.
+- **YouTube adapter:** `yt-dlp` is installed with the application but isolated in its own module because third-party extraction behavior changes over time.
 - **Reusable model instances:** local Faster-Whisper and multilingual embedding models load lazily once per process.
 - **Correct embedding input:** segmented transcription output is normalized into one text string before embedding.
 - **Explicit vector index:** normalized embeddings use FAISS inner-product search as cosine similarity.
@@ -37,7 +37,7 @@ flowchart LR
 - Optional OpenAI transcription and embeddings (requires a key)
 - FAISS
 - Gradio
-- optional `yt-dlp`
+- `yt-dlp` (YouTube and YouTube Music adapter)
 
 ## Project structure
 
@@ -47,13 +47,19 @@ flowchart LR
 ├── src/cover_search/
 │   ├── config.py
 │   ├── index.py
+│   ├── local.py
+│   ├── parakeet.py
 │   ├── models.py
 │   ├── services.py
 │   └── youtube.py
 ├── tests/
 │   ├── test_index.py
-│   └── test_services.py
+│   ├── test_services.py
+│   ├── test_local.py
+│   ├── test_parakeet.py
+│   └── test_reliability.py
 ├── .env.example
+├── requirements.txt
 └── pyproject.toml
 ```
 
@@ -64,7 +70,7 @@ python -m venv .venv
 source .venv/bin/activate        # macOS/Linux
 # .venv\Scripts\activate       # Windows
 
-pip install -e ".[dev]"
+pip install -r requirements.txt
 cp .env.example .env  # Windows: copy .env.example .env
 ```
 
@@ -72,12 +78,6 @@ The default `AI_PROVIDER=local` needs **no API key**. Model weights are download
 
 ```bash
 python app.py
-```
-
-For optional YouTube input:
-
-```bash
-pip install -e ".[youtube,dev]"
 ```
 
 ## Configuration
