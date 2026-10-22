@@ -215,7 +215,9 @@ with gr.Blocks(title="Semantic Cover Search") as demo:
         with gr.Row():
             with gr.Column():
                 gr.Markdown("### Upload a song to the catalog")
-                add_file = gr.Audio(type="filepath", sources=["upload"], label="Audio file to index")
+                add_file = gr.Audio(
+                    type="filepath", sources=["upload"], label="Audio file to index"
+                )
                 add_title = gr.Textbox(label="Title")
                 add_artist = gr.Textbox(label="Artist")
                 add_file_button = gr.Button("Transcribe & index", variant="primary")
