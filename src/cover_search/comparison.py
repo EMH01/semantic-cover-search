@@ -2,10 +2,10 @@
 
 The scores are descriptive similarities, not probabilities of a genuine cover.
 """
-from dataclasses import dataclass
-from itertools import combinations
 import re
 import unicodedata
+from dataclasses import dataclass
+from itertools import combinations
 
 import numpy as np
 
@@ -35,8 +35,8 @@ def lyric_phrase_overlap(first: str, second: str) -> float:
     if not a or not b:
         return 0.0
     n = 3 if min(len(a), len(b)) >= 3 else 1
-    left = set(zip(*(a[i:] for i in range(n)), strict=True))
-    right = set(zip(*(b[i:] for i in range(n)), strict=True))
+    left = {tuple(a[i:i + n]) for i in range(len(a) - n + 1)}
+    right = {tuple(b[i:i + n]) for i in range(len(b) - n + 1)}
     return len(left & right) / len(left | right)
 
 
