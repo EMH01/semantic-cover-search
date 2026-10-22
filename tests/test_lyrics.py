@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from cover_search.lyrics import find_lyrics, title_from_video
+from cover_search.lyrics import find_lyrics, lyric_title_for_result, title_from_video
 
 
 def test_video_title_cleanup():
@@ -76,3 +76,20 @@ def test_unrelated_lyrics_return_none():
 
     with patch("cover_search.lyrics.httpx.Client", FakeClient):
         assert find_lyrics("Hallelujah") is None
+
+
+def test_selected_youtube_result_uses_known_song_title_for_lyrics():
+    assert (
+        lyric_title_for_result(
+            "Hallelujah - Lucy Thomas - (Official Music Video)",
+            "Hallelujah",
+        )
+        == "Hallelujah"
+    )
+
+
+def test_lyric_search_title_must_appear_in_video_title():
+    assert (
+        lyric_title_for_result("Hallelujah (Acoustic cover)", "Used To Be Young")
+        == "Hallelujah"
+    )
