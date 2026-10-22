@@ -185,11 +185,7 @@ def add_selected_video(selection: str | None, videos: list[dict], catalog: SongI
 with gr.Blocks(title="Semantic Cover Search") as demo:
     catalog_state = gr.State(value=load_catalog)
     youtube_results_state = gr.State(value=[])
-    gr.Markdown(
-        "# 🎵 Semantic Cover Search\n"
-        "Compare lyrical content through transcription and embeddings. "
-        "Parakeet CPU mode requires no API key."
-    )
+    gr.Markdown("# 🎵 Semantic Cover Search")
 
     with gr.Tab("Discover covers on YouTube"):
         gr.Markdown(
