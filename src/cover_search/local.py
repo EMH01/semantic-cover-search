@@ -3,6 +3,7 @@
 The local backends are loaded lazily and reused. No inference API token is
 required. Initial model downloads require internet access on the host.
 """
+
 from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -13,6 +14,7 @@ import numpy as np
 @lru_cache(maxsize=1)
 def _whisper_model(model_name: str):
     from faster_whisper import WhisperModel
+
     return WhisperModel(model_name, device="cpu", compute_type="int8")
 
 
@@ -37,10 +39,14 @@ def transcribe_local(audio_bytes: bytes, filename: str, model_name: str = "base"
 @lru_cache(maxsize=1)
 def _embedding_model(model_name: str):
     from sentence_transformers import SentenceTransformer
+
     return SentenceTransformer(model_name, device="cpu")
 
 
-def embed_local(text: str, model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2") -> np.ndarray:
+def embed_local(
+    text: str,
+    model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+) -> np.ndarray:
     if not text.strip():
         raise ValueError("Cannot embed an empty transcript.")
     vector = np.asarray(_embedding_model(model_name).encode(text), dtype=np.float32)
