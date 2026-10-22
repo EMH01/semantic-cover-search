@@ -21,7 +21,7 @@ def test_duplicate_song_is_rejected():
     song = Song("Same", "Artist", "lyrics")
     index.add(song, np.array([1.0, 0.0]))
 
-    with pytest.raises(ValueError, match="already indexed"):
+    with pytest.raises(ValueError, match="already in catalog"):
         index.add(song, np.array([1.0, 0.0]))
 
 
@@ -44,7 +44,7 @@ def test_invalid_embeddings_are_rejected(vector):
 def test_duplicates_ignore_case():
     index = SongIndex()
     index.add(Song("Song", "Artist", "words"), np.array([1.0, 0.0]))
-    with pytest.raises(ValueError, match="already indexed"):
+    with pytest.raises(ValueError, match="already in catalog"):
         index.add(Song("SONG", "artist", "words"), np.array([0.0, 1.0]))
 
 
