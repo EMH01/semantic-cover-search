@@ -1,146 +1,70 @@
 # Semantic Cover Search
 
-A research prototype combining YouTube cover discovery with experimental local audio transcription and semantic retrieval.
+A local-first research prototype for discovering song covers on YouTube and experimenting with retrieval from sung phrases. The current implementation **does not identify arbitrary songs by melody or search the entire internet from a recording**.
 
-This project evolved from an earlier cover-search experiment. The core idea is preserved—transcribe songs, embed the lyrics, and search by semantic similarity—but the implementation is now split into testable components while keeping YouTube extraction isolated in its own adapter.
+## Features
 
-## Modes
+- **Discover covers on YouTube:** search YouTube for a song title plus "cover" using `yt-dlp`. Results show video title, channel and watch link. Search metadata is not confirmation that a video is a cover or that the uploader is the performing artist.
+- **Local catalog:** add a result from YouTube search, paste a YouTube URL, or upload an audio file. Uploaded MP3 tags can prefill an editable song title and performing artist. YouTube URLs are resolved to public title/uploader metadata via oEmbed.
+- **Lyrics lookup, not whole-song transcription:** when a song title is known, attempt a match on LRCLIB. If usable lyrics are found, embed their text locally for FAISS cosine-similarity search. Lyrics may represent a different version of the composition; **not** a verified transcript of the selected video.
+- **Metadata-only entries:** if lyrics cannot be matched, or the lyric/embedding service is unavailable, retain the song in the catalog as a reference without inventing a transcript or searchable embedding.
+- **Experimental singing search:** record a short phrase in Gradio, transcribe with NVIDIA Parakeet TDT 0.6B v3 on CPU (Faster-Whisper optionally available), and compare that text with the session's available lyric embeddings.
+- **Session-only state:** no database and no persistence. Restarting Gradio clears the catalog; this is intentional for a small demo.
 
-- **Discover covers on YouTube:** searches YouTube video metadata for a title and the word "cover" using `yt-dlp`, returning video titles, uploader channels and direct watch links. No media is downloaded during search. You can choose a result and **Add selected video to local catalog**; that explicit action downloads, transcribes and indexes the chosen audio. Results remain unverified cover candidates and uploader names are not assumed to be performers.
-- **Local catalog:** add uploaded audio, manual YouTube links, or selected discovery results. Uploaded audio fills editable song title and performing artist fields from embedded metadata when present, falling back to the filename and an unspecified performer. YouTube titles and uploader channels are retrieved automatically; uploader identity is not guaranteed to be the performer. SQLite stores song metadata, transcript and embeddings and reconstructs the FAISS search index after restart. All sessions of the same app instance share this database. Original audio is not saved.\n- **Experimental singing search:** compares microphone recordings against the saved catalog. It does **not** identify unknown songs from the internet or compare melodies.
-
-YouTube search availability and metadata depend on the third-party service and the installed `yt-dlp` version. A JavaScript runtime may be needed for some YouTube extraction paths. MusicBrainz discovery code remains an experimental research module but is not used by the main search tab.
-
-## Persistent local data
-
-The SQLite database is created automatically at `.local_data/catalog.sqlite3` (ignored by Git). You can set `COVER_CATALOG_DB` to an alternative database path. Keep the database private: it contains text transcriptions, and all browser sessions connected to the same server share it. A public multi-user deployment would require authentication and per-user storage. No files are uploaded to GitHub.
-
-An existing session-only catalog from an earlier version cannot be restored retroactively; songs added after this update will persist.
-
-## Pipeline
+## Architecture
 
 ```mermaid
 flowchart LR
-    A[Audio upload] --> C[Transcription]
-    B[YouTube URL - optional] --> X[yt-dlp adapter]
-    X --> C
-    C --> D[Normalized transcript]
-    D --> E[Embedding]
-    E --> F[FAISS IndexFlatIP]
-    Q[Query audio] --> QC[Transcription + embedding]
-    QC --> F
-    F --> R[Top-k cosine similarity]
+    A[Song title] --> Y[YouTube search metadata]
+    Y --> U[Select cover candidate]
+    B[Audio file with tags] --> C[Session catalog]
+    D[Manual YouTube URL] --> O[YouTube oEmbed metadata]
+    U --> C
+    O --> C
+    C --> L[LRCLIB lyric lookup]
+    L -->|Exact-title match| E[Multilingual embedding]
+    L -->|No reliable match| M[Metadata-only record]
+    E --> F[FAISS vector index]
+    Q[Recorded sung phrase] --> P[Local Parakeet ASR]
+    P --> QE[Query embedding]
+    QE --> F
+    F --> R[Closest lyric matches]
 ```
 
-## What changed from the original experiment
+**Important:** Neither YouTube metadata nor LRCLIB guarantees that a result is a genuine cover or identifies an unknown song. Parakeet was designed for speech recognition; singing, instrumentals and humming are unreliable. Comparisons against whole lyrics can be weak for very short recorded excerpts. No melodic fingerprinting, chroma/DTW matching, or internet-wide audio identification has been implemented.
 
-- **Stable primary input:** uploaded audio works independently of YouTube.
-- **YouTube adapter:** `yt-dlp` is installed with the application but isolated in its own module because third-party extraction behavior changes over time.
-- **Reusable model instances:** local Faster-Whisper and multilingual embedding models load lazily once per process.
-- **Correct embedding input:** segmented transcription output is normalized into one text string before embedding.
-- **Explicit vector index:** normalized embeddings use FAISS inner-product search as cosine similarity.
-- **Testable core:** ranking, duplicate detection, transcription normalization, and embedding normalization are covered without real API calls.
+## Installation
 
-## Stack
+Use Python 3.11 or 3.12 and a per-project virtual environment.
 
-- Python 3.11+
-- NVIDIA Parakeet TDT 0.6B v3 via sherpa-onnx (default CPU speech recognition)
-- Faster-Whisper (comparison backend; CPU, `base`, int8)
-- Sentence Transformers (`paraphrase-multilingual-MiniLM-L12-v2`, CPU)
-- Optional OpenAI transcription and embeddings (requires a key)
-- FAISS
-- Gradio
-- YouTube search metadata via `yt-dlp`
-- `yt-dlp` (YouTube and YouTube Music adapter)
-
-## Project structure
-
-```text
-.
-├── app.py
-├── src/cover_search/
-│   ├── config.py
-│   ├── discovery.py
-│   ├── index.py
-│   ├── local.py
-│   ├── parakeet.py
-│   ├── models.py
-│   ├── storage.py
-│   ├── services.py
-│   └── youtube.py
-├── tests/
-│   ├── test_discovery.py
-│   ├── test_index.py
-│   ├── test_services.py
-│   ├── test_local.py
-│   ├── test_parakeet.py
-│   └── test_reliability.py
-├── .env.example
-├── requirements.txt
-└── pyproject.toml
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe app.py
 ```
 
-## Setup
+The app runs at `http://127.0.0.1:7860` by default. The first **singing-search** request can download the Parakeet model (approximately 670 MB) if it is not cached. Catalog entry from metadata/lyrics does **not** download entire YouTube audio files or transcribe full songs.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate        # macOS/Linux
-# .venv\Scripts\activate       # Windows
+## Testing
 
-pip install -r requirements.txt
-cp .env.example .env  # Windows: copy .env.example .env
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check .
 ```
 
-The default `AI_PROVIDER=local` needs **no API key**. Model weights are downloaded on first use; the host needs an internet connection for that initial download. Then run:
+Tests mock outside services and do not prove real YouTube or LRCLIB availability, nor melodic/lyric matching accuracy.
 
-```bash
-python app.py
-```
+## Privacy, provider limitations and rights
 
-## Configuration
+- YouTube search uses third-party extraction. Depending on the version, `yt-dlp` may need a JavaScript runtime for complete YouTube support. See the [official setup guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
+- [LRCLIB](https://lrclib.net/docs) provides a no-key API, with published rate limits and identification requirements. This demo fetches lyrics on demand rather than redistributing a local database. Song lyrics may be copyrighted independently of the API/software license: confirm appropriate rights and provider terms before public deployment. Keep source attribution visible and do not assume texts can be republished freely.
+- Uploaded file metadata is processed locally. The singing recording is processed locally by Parakeet/Whisper; known song titles can be sent to LRCLIB; video titles and URLs can be sent to YouTube services.
+- The catalog stays in Gradio's server/session memory only. Audio uploaded for lookup is not stored in a project database.
+- An old `.local_data/catalog.sqlite3` created by previous development versions is no longer used. `.local_data/` stays in `.gitignore` to prevent accidental commits.
 
-| Variable | Purpose | Default |
-|---|---|---|
-| `AI_PROVIDER` | Local inference by default; OpenAI is optional | `local` |
-| `ASR_ENGINE` | Local speech recognizer: `parakeet` or `whisper` | `parakeet` |
-| `LOCAL_WHISPER_MODEL` | Faster-Whisper model size | `base` |
-| `LOCAL_EMBEDDING_MODEL` | Multilingual sentence-transformer model | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
-| `OPENAI_API_KEY` | Needed only for the optional OpenAI provider | not required |
-| `OPENAI_TRANSCRIPTION_MODEL` | Optional OpenAI speech-to-text model | `gpt-transcribe` |
-| `OPENAI_EMBEDDING_MODEL` | Optional OpenAI embedding model | `text-embedding-3-small` |
+## Potential Enhancements
 
-## Quality checks
-
-```bash
-ruff check .
-pytest -q
-```
-
-## Retrieval notes
-
-FAISS `IndexFlatIP` returns inner-product scores. Because every stored/query vector is L2-normalized, the score is equivalent to cosine similarity. The UI reports this value as a percentage-like similarity score for exploration; it should **not** be interpreted as a calibrated probability that two recordings are covers of the same song.
-
-## Current scope and validation roadmap
-
-The current implementation establishes a reproducible architecture. The next step is empirical validation:
-
-- create a small labelled set containing originals, known covers, and unrelated songs
-- measure Recall@K / ranking quality
-- compare transcription providers and embedding models
-- test multilingual covers and translated lyrics
-- evaluate robustness to instrumental sections and noisy recordings
-- add screenshots / demo media after the UI is validated
-
-## Project evolution
-
-This implementation supersedes the earlier prototype and is the maintained version of the project.
-
-## Local inference limitations
-
-Parakeet and Faster-Whisper recognize speech and lyrics acoustically, but results can be unreliable on dense music, instrumentals, and noisy recordings. Embeddings compare **transcribed language**, not musical structure; the similarity score is not a probability of two recordings being covers. First use loads two local models into RAM and CPU transcription may take time. The Gradio catalog is scoped to each browser session and is not persistent.
-
-## Default Parakeet speech recognition
-
-The default backend is NVIDIA **Parakeet TDT 0.6B v3**, served locally with **sherpa-onnx** using the converted INT8 ONNX model from [csukuangfj](https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8). Its approximate 670 MB model files are downloaded to the Hugging Face cache on first transcription; no API token or inference subscription is required. Audio is decoded to mono 16 kHz using PyAV.
-
-To compare with Faster-Whisper, configure `ASR_ENGINE=whisper` in your `.env` file and restart the app. The ASR engine does **not** compare melodies; songs are still retrieved by the meaning of the recognized lyrics. Windows inference and recognition of singing require real-device validation. Some sherpa-onnx Windows versions have been reported to return empty transcriptions with this architecture. The app raises an explicit error instead of inventing a result.
+- Melody-oriented song identification using a licensed reference corpus, robust pitch/chroma representations and sequence alignment.
+- Segment-level lyric indexing to improve short-fragment retrieval.
+- Test sets of original recordings, covers and unrelated songs, with Recall@K and ranking quality metrics.
+- Rights-cleared, user-facing lyric references for a public deployment.
