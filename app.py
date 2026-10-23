@@ -281,7 +281,9 @@ def render_lyric_comparison_cards(comparisons) -> str:
             f'<div class="scs-meter"><div class="scs-meter-fill" '
             f'style="width:{lexical:.1f}%"></div></div></div>'
             '<div class="scs-metric">'
-            '<div class="scs-metric-label">Embedding cosine × 100</div>'
+            '<div class="scs-metric-label" '
+            'title="Cosine similarity between normalized lyric embeddings, multiplied by 100. Not a probability.">'
+            'Semantic similarity ⓘ</div>'
             f'<div class="scs-metric-value">{cosine:.1f}</div>'
             '<div class="scs-meter"><div class="scs-meter-fill scs-meter-fill-alt" '
             f'style="width:{cosine_width:.1f}%"></div></div></div></div>'
@@ -310,7 +312,8 @@ def compare_catalog_lyrics(catalog: SongIndex, top_pairs: int):
         f"**{len(pairs)} {pair_label} compared** · {eligible} songs with lyrics · "
         f"{excluded} metadata-only {excluded_label} excluded. "
         f"Showing {len(displayed)} highest-ranked pairs, prioritizing shared phrases. "
-        "Scores are text similarities, not confirmed cover relationships."
+        "Semantic similarity = embedding cosine × 100, not a probability. "
+        "Neither score confirms a cover relationship."
     )
     return note, render_lyric_comparison_cards(displayed)
 
@@ -442,14 +445,6 @@ def search_recording_on_youtube(
     )
 
 
-def processing_status():
-    """Immediate visible feedback before the queued import starts."""
-    return (
-        "⏳ **Processing song…** Checking reference lyrics first; "
-        "audio download, transcription and embedding may follow."
-    )
-
-
 def add_selected_video(
     selection: str | None, videos: list[dict], catalog: SongIndex,
     progress: gr.Progress = gr.Progress(),
@@ -548,7 +543,7 @@ with gr.Blocks(
             "Add selected video to local catalog", visible=False,
             elem_classes=["scs-secondary"]
         )
-        selected_status = gr.Markdown()
+        selected_status = gr.Markdown(elem_classes=["scs-status"])
         public_search.click(
             search_public_versions,
             inputs=public_title,
@@ -606,7 +601,7 @@ with gr.Blocks(
                     "Add link to catalog", elem_classes=["scs-secondary"]
                 )
 
-        add_status = gr.Markdown()
+        add_status = gr.Markdown(elem_classes=["scs-status"])
         with gr.Accordion("Lyrics or automatic transcription · latest song", open=False):
             lyrics_view = gr.HTML(value=render_transcription(None))
         catalog_table = gr.Dataframe(
@@ -641,32 +636,29 @@ with gr.Blocks(
             outputs=[comparison_status, comparison_results],
             show_progress="minimal",
         )
+        # Use Gradio's single native progress indicator for each import.
+        # Restrict its overlay to the status component: never cover the
+        # catalog and lyric panel or stack it on a second loading message.
         add_selected_button.click(
-            processing_status, inputs=None, outputs=selected_status,
-            queue=False, show_progress="hidden",
-        ).then(
             add_selected_video,
             inputs=[result_selection, youtube_results_state, catalog_state],
             outputs=[selected_status, catalog_table, catalog_state, lyrics_view],
-            show_progress="minimal",
+            show_progress="full",
+            show_progress_on=[selected_status],
         )
         add_file_button.click(
-            processing_status, inputs=None, outputs=add_status,
-            queue=False, show_progress="hidden",
-        ).then(
             add_upload,
             inputs=[add_file, add_title, add_artist, catalog_state],
             outputs=[add_status, catalog_table, catalog_state, lyrics_view],
-            show_progress="minimal",
+            show_progress="full",
+            show_progress_on=[add_status],
         )
         add_url_button.click(
-            processing_status, inputs=None, outputs=add_status,
-            queue=False, show_progress="hidden",
-        ).then(
             add_youtube,
             inputs=[add_url, catalog_state],
             outputs=[add_status, catalog_table, catalog_state, lyrics_view],
-            show_progress="minimal",
+            show_progress="full",
+            show_progress_on=[add_status],
         )
 
 
