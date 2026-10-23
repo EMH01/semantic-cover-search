@@ -1,9 +1,18 @@
 """Synthetic melody regressions: no downloaded songs, models or external services."""
+import io
+import wave
+
 import numpy as np
 import pytest
 
 from cover_search.index import SongIndex
-from cover_search.melody import HOP, SAMPLE_RATE, MelodyError, melody_match
+from cover_search.melody import (
+    HOP,
+    SAMPLE_RATE,
+    MelodyError,
+    extract_chroma,
+    melody_match,
+)
 from cover_search.models import Song
 
 
@@ -69,3 +78,39 @@ def test_melody_matches_are_not_probabilities():
     score, _, _ = melody_match(query, other)
     assert 0 <= score <= 1
     assert score < 0.4
+
+
+def _wav_tone(frequency: int = 440, seconds: int = 4) -> bytes:
+    time = np.arange(SAMPLE_RATE * seconds) / SAMPLE_RATE
+    samples = (0.4 * np.sin(2 * np.pi * frequency * time) * 32767).astype(
+        np.int16
+    )
+    destination = io.BytesIO()
+    with wave.open(destination, "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(SAMPLE_RATE)
+        output.writeframes(samples.tobytes())
+    return destination.getvalue()
+
+
+def test_chroma_extraction_from_synthetic_melody_audio():
+    pytest.importorskip("av")
+    chroma = extract_chroma(_wav_tone())
+    assert chroma.ndim == 2 and chroma.shape[1] == 12
+    assert chroma.shape[0] >= 7
+    # A4 is pitch class 9 in our MIDI-to-pitch-class convention.
+    assert int(np.argmax(chroma.mean(axis=0))) == 9
+
+
+def test_silent_audio_is_rejected_for_melody_matching():
+    pytest.importorskip("av")
+    samples = np.zeros(SAMPLE_RATE * 4, dtype=np.int16)
+    output = io.BytesIO()
+    with wave.open(output, "wb") as writer:
+        writer.setnchannels(1)
+        writer.setsampwidth(2)
+        writer.setframerate(SAMPLE_RATE)
+        writer.writeframes(samples.tobytes())
+    with pytest.raises(MelodyError, match="silent"):
+        extract_chroma(output.getvalue())
