@@ -647,6 +647,11 @@ with gr.Blocks(
                 add_file_button = gr.Button(
                     "Add song to catalog", variant="primary", elem_classes=["scs-primary"]
                 )
+                upload_melody_button = gr.Button(
+                    "Analyze this audio as a melody reference",
+                    elem_classes=["scs-secondary"],
+                )
+                upload_melody_status = gr.Markdown(elem_classes=["scs-status"])
             with gr.Column(elem_classes=["scs-panel"]):
                 gr.Markdown(
                     "### Add a song from YouTube", elem_classes=["scs-section-title"]
@@ -654,6 +659,16 @@ with gr.Blocks(
                 add_url = gr.Textbox(label="YouTube URL")
                 add_url_button = gr.Button(
                     "Add link to catalog", elem_classes=["scs-secondary"]
+                )
+                url_melody_button = gr.Button(
+                    "Analyze this YouTube melody (experimental)",
+                    elem_classes=["scs-secondary"],
+                )
+                url_melody_status = gr.Markdown(elem_classes=["scs-status"])
+                gr.Markdown(
+                    "Melody reference analysis is optional and downloads the audio "
+                    "only when you request it. The catalog keeps features, not audio.",
+                    elem_classes=["scs-intro"],
                 )
                 with gr.Accordion("Search by singing or humming · experimental", open=False):
                     gr.Markdown(
@@ -674,7 +689,22 @@ with gr.Blocks(
                         lines=3,
                         interactive=False,
                     )
-                    gr.Markdown("#### Compare against your catalog")
+                    gr.Markdown("#### Find similar melodies in your catalog")
+                    melody_search_button = gr.Button(
+                        "Find matching melodies",
+                        elem_classes=["scs-primary"],
+                    )
+                    melody_search_status = gr.Markdown()
+                    melody_results_table = gr.Dataframe(
+                        headers=[
+                            "Rank", "Song", "Performer / uploader",
+                            "Melody alignment × 100", "Matched time",
+                        ],
+                        datatype=["number", "str", "str", "str", "str"],
+                        interactive=False,
+                        label="Experimental melody matches",
+                    )
+                    gr.Markdown("#### Compare recognized words with catalog lyrics")
                     top_k = gr.Slider(1, 10, value=5, step=1, label="Local top results")
                     search_file_button = gr.Button(
                         "Compare recording with catalog lyrics", elem_classes=["scs-secondary"]
@@ -738,6 +768,26 @@ with gr.Blocks(
             compare_catalog_lyrics,
             inputs=[catalog_state, comparison_top],
             outputs=[comparison_status, comparison_results],
+            show_progress="minimal",
+        )
+        upload_melody_button.click(
+            index_uploaded_melody,
+            inputs=[add_file, add_title, add_artist, catalog_state],
+            outputs=[upload_melody_status, catalog_table, catalog_state],
+            show_progress="full",
+            show_progress_on=[upload_melody_status],
+        )
+        url_melody_button.click(
+            index_youtube_melody,
+            inputs=[add_url, catalog_state],
+            outputs=[url_melody_status, catalog_table, catalog_state],
+            show_progress="full",
+            show_progress_on=[url_melody_status],
+        )
+        melody_search_button.click(
+            search_recorded_melody,
+            inputs=[query_file, top_k, catalog_state],
+            outputs=[melody_search_status, melody_results_table],
             show_progress="minimal",
         )
         record_search_button.click(
