@@ -1,6 +1,6 @@
 # Semantic Cover Search
 
-A local-first research prototype for discovering song covers on YouTube and comparing songs through lyric and experimental audio similarity. **Melody matching works only against audio references explicitly analyzed in the session catalog**; it cannot identify arbitrary unindexed songs across the internet.
+A local-first research prototype for discovering song covers on YouTube and comparing songs through lyric and experimental audio similarity. **Melody comparison uses features automatically extracted from uploaded audio files**; it cannot identify arbitrary unindexed songs across the internet.
 
 ## Features
 
@@ -8,9 +8,9 @@ A local-first research prototype for discovering song covers on YouTube and comp
 - **Local catalog:** add a result from YouTube search, paste a YouTube URL, or upload an audio file. Uploaded MP3 tags can prefill an editable song title and performing artist. YouTube URLs are resolved to public title/uploader metadata via oEmbed.
 - **Lyrics-first, ASR fallback:** retrieve title-matched reference lyrics through the LRCLIB no-key API. If none are available **or the provider fails**, transcribe the uploaded audio or a bounded download of the selected YouTube video with the configured speech recognizer (Parakeet TDT on CPU by default). Index recognized text with local embeddings in FAISS. If both routes fail, retain a metadata-only entry rather than indexing invented words. LRCLIB lyrics may represent a different rendition, and speech recognition of singing may be inaccurate.
 - **Metadata-only entries:** if neither reference lyrics nor the fallback transcription produces usable text (or embedding fails), retain the song in the catalog without a searchable vector. Status and catalog columns distinguish **reference lyrics**, **automatic transcription**, and **metadata only**.
-- **Compare all catalog lyrics:** in **Local catalog**, click **Compare all catalog lyrics** to evaluate every unique song pair with indexed text. Rank pairs by shared consecutive three-word phrases (Jaccard overlap), then local embedding cosine similarity, displayed as separate measurements. Uses already-computed vectors; no repeat API calls, transcription or download. Metadata-only songs are excluded, and the view reports their count. Identical reference lyrics are **not proof** that two uploaded or linked performances are covers.
-- **Recording search (in Local catalog):** under the YouTube URL field, record a short phrase using the microphone. Use locally recognized words to discover YouTube candidates or compare the transcription with indexed lyrics in the catalog. These search methods remain lyric-based.
-- **Experimental melody matching:** explicitly choose **Analyze this audio as a melody reference** for a local upload or **Analyze this YouTube melody (experimental)** for a pasted video URL. Audio is processed transiently; only 12-bin chroma features are stored in session memory, never raw media. A short sung/hummed recording can then be compared to up to 12 catalog references using subsequence chroma correlation, tolerating transposition and modest tempo changes. This does **not** search YouTube by sound, perform acoustic fingerprinting, isolate vocals, or recognize an unindexed song. The alignment score is not a song-identification probability.
+- **Compare catalog songs:** click **Compare all catalog lyrics** to evaluate each pair with measurable features. The cards display three separate metrics: shared lyric phrases (three-word Jaccard), semantic similarity (embedding cosine × 100), and optional **melody similarity (experimental chroma alignment)**. The third measure is automatically available for pairs of uploaded audio files; YouTube links without analyzed audio correctly show N/A. Audio-only pairs can still be compared even without recognized lyrics. No API calls or audio downloads are needed at comparison time.
+- **Recording search (in Local catalog):** beneath the YouTube URL field, record a short phrase with the microphone. The **Search YouTube using recognized words** action transcribes with Parakeet and searches YouTube for unverified lyric-based candidates; it does *not* search the whole YouTube catalog by melody. The **Compare recording with catalog (lyrics + melody)** action compares with both available lyric embeddings and automatically analyzed uploaded audio references, without requiring ASR to succeed for a melody-only match.
+- **Automatic upload melody analysis:** when a song is uploaded, the app attempts to extract normalized 12-bin chroma audio features (up to three minutes) while building its catalog entry. If audio analysis fails, lyric ingestion still works. Up to 12 audio references remain in session memory; raw media is not stored. The melody metric uses pitch-class subsequence correlation with approximate transposition/tempo tolerance. It is not source-separated vocal pitch, music fingerprinting, or calibrated identification confidence. YouTube video links do not trigger additional audio downloads simply to populate this metric.
 - **Session-only state:** no database and no persistence. Restarting Gradio clears the catalog; this is intentional for a small demo.
 
 ## Architecture
@@ -30,10 +30,11 @@ flowchart LR
     ASR -->|No words or download failure| M[Metadata-only record]
     E --> F[FAISS vector index]
     F --> Cmp[Compare all catalog lyric pairs]
-    H[Uploaded or selected reference audio] --> MC[Local chroma extraction]
+    H[Uploaded audio file] --> MC[Automatic local chroma extraction]
     MC --> MI[In-session melody references]
     Q[Recorded sung phrase] --> HC[Query chroma]
     HC --> MS[Melody subsequence alignment]
+    MI --> Pair[Third metric in catalog pair comparison]
     MI --> MS
     Q --> P[Local Parakeet ASR]
     P --> YQ[YouTube lyric-phrase search]
@@ -58,13 +59,13 @@ The app runs at `http://127.0.0.1:7860` by default. The Gradio interface uses a 
 
 ## Testing the melody prototype
 
-1. In **Local catalog**, upload an audio recording with a clear musical phrase and click **Analyze this audio as a melody reference**. An entry can be melody-indexed even if it has no lyrics.
-2. For a different reference, paste a YouTube video link and explicitly click **Analyze this YouTube melody (experimental)**. The latter downloads bounded audio only when requested, and analyzes its first three minutes at most.
-3. Under the YouTube link, expand **Search by singing or humming · experimental**. Record 5–20 seconds of melody with the microphone and click **Find matching melodies**.
-4. Examine the ranked candidates, their score (chroma alignment × 100, **not a probability**) and approximate position in the analyzed reference. Compare several real examples: same melody, different melody, and a hummed or transposed phrase.
-5. If the catalog contains no melody references, the recording search asks you to index at least one. Catalog melody data resets when the Gradio session ends.
+1. In **Local catalog**, upload two short recordings or songs with different performers. Click **Add song to catalog** for each. Melody analysis is attempted automatically, even when LRCLIB provides lyrics.
+2. Verify that the catalog marks their **Melody** status as *Ready*. For a YouTube-only link, *Not analyzed* is expected because no extra download is performed for melody.
+3. Click **Compare all catalog lyrics**. The same comparison cards now show **Shared lyric phrases**, **Semantic similarity** and **Melody similarity · experimental**. The last metric should show N/A for pairs missing audio features.
+4. Under the YouTube URL, expand the recording panel. Sing or hum 5–20 seconds, then use **Compare recording with catalog (lyrics + melody)**. You can obtain melody candidates even when speech recognition finds no words.
+5. Independently, use **Search YouTube using recognized words** to get lyric-based YouTube video candidates. This is not YouTube melody search. The session data resets when Gradio restarts.
 
-This is **not** a promise of robust commercial-song recognition: singing a cappella and comparing against full instrumental mixes may give poor rankings. A future research iteration could use predominant-melody extraction and aligned, rights-cleared reference corpora.
+This is an experimental spectral-chroma baseline, not robust musical identity recognition: vocal humming and mixed commercial tracks can yield misleading similarities. The app does not search unindexed songs on YouTube by audio. A future version could use predominant-melody extraction and a rights-cleared reference corpus.
 
 ## Testing
 
@@ -80,7 +81,7 @@ Tests mock outside services and do not prove real YouTube or LRCLIB availability
 - YouTube search uses third-party extraction. Depending on the version, `yt-dlp` may need a JavaScript runtime for complete YouTube support. See the [official setup guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
 - [LRCLIB](https://lrclib.net/docs) provides a no-key API, with published rate limits and identification requirements. This demo fetches lyrics on demand rather than redistributing a local database. Song lyrics may be copyrighted independently of the API/software license: **check lyric display/indexing rights before public deployment**, even when data comes from an API. Each lyric panel links to the source. Other no-key services such as lyrics.ovh scrape third-party lyric pages and are not enabled as a fallback because their data provenance/reuse terms do not provide a clear basis for a public showcase.
 - Uploaded file metadata and spectral melody features are processed locally. The singing recording is processed locally by Parakeet/Whisper or by chroma analysis; known song titles can be sent to LRCLIB; video titles and URLs can be sent to YouTube services.
-- The catalog stays in Gradio's server/session memory only. Audio used for fallback and explicit melody analysis is processed transiently and is not stored in a project database.
+- The catalog stays in Gradio's session memory. Uploaded audio can be analyzed for melody automatically; the application retains only its pitch-class features, not the raw audio in its own database. Gradio may still manage temporary upload files during the session.
 - An old `.local_data/catalog.sqlite3` created by previous development versions is no longer used. `.local_data/` stays in `.gitignore` to prevent accidental commits.
 
 ## Potential Enhancements
