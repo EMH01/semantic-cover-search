@@ -274,24 +274,54 @@ def format_results(results):
 
 
 def render_lyric_comparison_cards(comparisons) -> str:
-    """Compact comparison cards; lexical and semantic metrics stay distinct."""
+    """Three independent metrics; missing audio/text is never scored as zero."""
     if not comparisons:
         return (
-            '<div class="scs-empty">No song pairs to compare. '
-            'Add two songs with lyrics first.</div>'
+            '<div class="scs-empty">No comparable song pairs yet. '
+            'Add two songs with indexed lyrics or uploaded audio.</div>'
         )
     cards = []
     for rank, pair in enumerate(comparisons, start=1):
         left, right = escape(pair.first.label), escape(pair.second.label)
-        lexical = pair.phrase_overlap * 100
-        cosine = pair.semantic_similarity * 100
-        cosine_width = max(0, min(100, cosine))
-        first_source = "LRCLIB" if pair.first.text_origin == "lrclib" else "ASR"
-        second_source = "LRCLIB" if pair.second.text_origin == "lrclib" else "ASR"
+        first_source = (
+            "LRCLIB" if pair.first.text_origin == "lrclib"
+            else "ASR" if pair.first.text_origin == "asr" else "No lyrics"
+        )
+        second_source = (
+            "LRCLIB" if pair.second.text_origin == "lrclib"
+            else "ASR" if pair.second.text_origin == "asr" else "No lyrics"
+        )
+        metrics = [
+            ("Shared lyric phrases", pair.phrase_overlap, "scs-meter-fill"),
+            ("Semantic similarity ⓘ", pair.semantic_similarity, "scs-meter-fill-alt"),
+            ("Melody similarity · experimental", pair.melody_similarity, "scs-meter-fill"),
+        ]
+        metric_html = []
+        for label, value, color in metrics:
+            # Cosine is signed; preserve negative values, cap only bar width.
+            display = "N/A" if value is None else f"{value * 100:.1f}"
+            if value is not None and label == "Shared lyric phrases":
+                display += "%"
+            fraction = 0 if value is None else max(0.0, min(100.0, value * 100))
+            explanation = (
+                "N/A: the catalog does not have both audio references"
+                if value is None and "Melody" in label else
+                "Not enough indexed text to compare this pair"
+                if value is None else
+                "Exploratory text/audio similarity, not identification confidence"
+            )
+            metric_html.append(
+                '<div class="scs-metric">'
+                f'<div class="scs-metric-label" title="{escape(explanation)}">'
+                f'{escape(label)}</div>'
+                f'<div class="scs-metric-value">{display}</div>'
+                f'<div class="scs-meter"><div class="scs-meter-fill {color}" '
+                f'style="width:{fraction:.1f}%"></div></div></div>'
+            )
         note = (
-            "Identical indexed text is not proof of identical performances."
+            "Identical indexed lyrics do not prove identical performances."
             if pair.exact_text else
-            "Scores describe indexed text, not verified cover identity."
+            "Lyrics and melody are separate, uncalibrated measurements."
         )
         cards.append(
             '<article class="scs-match">'
@@ -301,47 +331,40 @@ def render_lyric_comparison_cards(comparisons) -> str:
             '<div class="scs-match-divider"></div>'
             f'<div class="scs-track-name">{right}</div>'
             f'<div class="scs-track-source">Text: {second_source}</div>'
-            '<div class="scs-metrics">'
-            '<div class="scs-metric">'
-            '<div class="scs-metric-label">Shared lyric phrases</div>'
-            f'<div class="scs-metric-value">{lexical:.1f}%</div>'
-            f'<div class="scs-meter"><div class="scs-meter-fill" '
-            f'style="width:{lexical:.1f}%"></div></div></div>'
-            '<div class="scs-metric">'
-            '<div class="scs-metric-label" '
-            'title="Cosine similarity between normalized lyric embeddings, '
-            'multiplied by 100. Not a probability.">'
-            'Semantic similarity ⓘ</div>'
-            f'<div class="scs-metric-value">{cosine:.1f}</div>'
-            '<div class="scs-meter"><div class="scs-meter-fill scs-meter-fill-alt" '
-            f'style="width:{cosine_width:.1f}%"></div></div></div></div>'
+            '<div class="scs-metrics">' + "".join(metric_html) + '</div>'
             f'<p class="scs-match-note">{escape(note)}</p>'
             '</article>'
         )
     return '<div class="scs-match-grid">' + "".join(cards) + '</div>'
 
+
 def compare_catalog_lyrics(catalog: SongIndex, top_pairs: int):
-    """Evaluate every eligible pair; render only the best N to avoid long screens."""
+    """Compare lyrics and audio automatically if those features are available."""
     total = len(catalog.songs)
-    eligible = catalog.indexed_count
+    eligible = len({
+        *catalog.searchable_songs,
+        *catalog.melody_songs,
+    })
     excluded = total - eligible
     pairs = catalog.compare_all()
     if not pairs:
         return (
-            f"**{eligible} of {total} songs have searchable text.** "
-            "Add at least two songs with reference lyrics or automatic transcription "
-            "to compare them. Songs without text are excluded.",
+            f"**{eligible} of {total} songs have text or audio features.** "
+            "Add at least two comparable songs. "
+            "YouTube links alone do not supply melody data.",
             render_lyric_comparison_cards([]),
         )
     displayed = pairs[:max(1, min(int(top_pairs), 50))]
-    excluded_label = "song" if excluded == 1 else "songs"
     pair_label = "pair" if len(pairs) == 1 else "pairs"
+    song_label = "song" if excluded == 1 else "songs"
     note = (
-        f"**{len(pairs)} {pair_label} compared** · {eligible} songs with lyrics · "
-        f"{excluded} metadata-only {excluded_label} excluded. "
-        f"Showing {len(displayed)} highest-ranked pairs, prioritizing shared phrases. "
-        "Semantic similarity = embedding cosine × 100, not a probability. "
-        "Neither score confirms a cover relationship."
+        f"**{len(pairs)} {pair_label} compared** · "
+        f"{catalog.indexed_count} lyric-indexed · "
+        f"{catalog.melody_count} audio-analyzed · "
+        f"{excluded} metadata-only {song_label} excluded. "
+        "Sorted primarily by shared lyric phrases. "
+        "Melody similarity is N/A when either recording is unavailable; "
+        "scores are not probabilities of a cover match."
     )
     return note, render_lyric_comparison_cards(displayed)
 
