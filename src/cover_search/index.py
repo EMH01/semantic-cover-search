@@ -24,6 +24,14 @@ class SongIndex:
     def indexed_count(self) -> int:
         return len(self._indexed_songs)
 
+    @property
+    def searchable_songs(self) -> tuple[Song, ...]:
+        return tuple(self._indexed_songs)
+
+    @property
+    def melody_songs(self) -> tuple[Song, ...]:
+        return tuple(self._melodies)
+
     def add(self, song: Song, embedding: np.ndarray | None = None) -> None:
         """Save metadata even when no reliable lyrics embedding is available."""
         identity = (song.title.casefold(), song.artist.casefold())
