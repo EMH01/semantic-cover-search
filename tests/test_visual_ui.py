@@ -38,3 +38,26 @@ def test_visual_theme_contains_mobile_layout_and_keyboard_focus():
     assert "focus-visible" in APP_CSS
     assert "scs-video-grid" in APP_CSS
     assert "Semantic Cover Search" in HERO_HTML
+
+
+def test_comparison_metric_label_is_understandable_without_changing_formula():
+    import numpy as np
+
+    from app import render_lyric_comparison_cards
+    from cover_search.index import SongIndex
+    from cover_search.models import Song
+
+    index = SongIndex()
+    index.add(Song("One", "Artist A", "some song lyrics"), np.array([1.0, 0.0]))
+    index.add(Song("Two", "Artist B", "other music lyrics"), np.array([0.6, 0.8]))
+    html = render_lyric_comparison_cards(index.compare_all())
+    assert "Semantic similarity" in html
+    assert "Not a probability" in html
+    assert "60.0" in html  # cosine(1,0 and 0.6,0.8) * 100
+
+
+def test_status_area_reserves_loading_space():
+    from cover_search.ui_theme import APP_CSS
+
+    assert ".gradio-container .scs-status" in APP_CSS
+    assert "min-height: 52px" in APP_CSS
