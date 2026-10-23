@@ -2,6 +2,7 @@
 import os
 import re
 from html import escape
+from inspect import signature
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -469,13 +470,17 @@ def add_selected_video(
     )
 
 
+UI_THEME = gr.themes.Soft(
+    primary_hue=gr.themes.colors.violet,
+    neutral_hue=gr.themes.colors.slate,
+)
+UI_OPTIONS = {"theme": UI_THEME, "css": APP_CSS}
+# Gradio 6 moved theme/css from Blocks(...) to launch(...).
+STYLE_ON_BLOCKS = "theme" in signature(gr.Blocks).parameters
+
 with gr.Blocks(
     title="Semantic Cover Search",
-    css=APP_CSS,
-    theme=gr.themes.Soft(
-        primary_hue=gr.themes.colors.violet,
-        neutral_hue=gr.themes.colors.slate,
-    ),
+    **(UI_OPTIONS if STYLE_ON_BLOCKS else {}),
 ) as demo:
     catalog_state = gr.State(value=SongIndex)
     youtube_results_state = gr.State(value=[])
@@ -667,4 +672,4 @@ with gr.Blocks(
 
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(**({} if STYLE_ON_BLOCKS else UI_OPTIONS))
