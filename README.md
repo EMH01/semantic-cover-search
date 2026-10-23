@@ -8,7 +8,8 @@ A local-first research prototype for discovering song covers on YouTube and expe
 - **Local catalog:** add a result from YouTube search, paste a YouTube URL, or upload an audio file. Uploaded MP3 tags can prefill an editable song title and performing artist. YouTube URLs are resolved to public title/uploader metadata via oEmbed.
 - **Lyrics-first, ASR fallback:** retrieve title-matched reference lyrics through the LRCLIB no-key API. If none are available **or the provider fails**, transcribe the uploaded audio or a bounded download of the selected YouTube video with the configured speech recognizer (Parakeet TDT on CPU by default). Index recognized text with local embeddings in FAISS. If both routes fail, retain a metadata-only entry rather than indexing invented words. LRCLIB lyrics may represent a different rendition, and speech recognition of singing may be inaccurate.
 - **Metadata-only entries:** if neither reference lyrics nor the fallback transcription produces usable text (or embedding fails), retain the song in the catalog without a searchable vector. Status and catalog columns distinguish **reference lyrics**, **automatic transcription**, and **metadata only**.
-- **Compare all catalog lyrics:** in **Local catalog**, click **Compare all catalog lyrics** to evaluate every unique song pair with indexed text. Rank pairs by shared consecutive three-word phrases (Jaccard overlap), then local embedding cosine similarity, displayed as separate measurements. Uses already-computed vectors; no repeat API calls, transcription or download. Metadata-only songs are excluded, and the view reports their count. Identical reference lyrics are **not proof** that two uploaded or linked performances are covers.\n- **Experimental singing search:** record a short phrase in Gradio, transcribe with NVIDIA Parakeet TDT 0.6B v3 on CPU (Faster-Whisper optionally available), and compare that text with the session's available lyric embeddings.
+- **Compare all catalog lyrics:** in **Local catalog**, click **Compare all catalog lyrics** to evaluate every unique song pair with indexed text. Rank pairs by shared consecutive three-word phrases (Jaccard overlap), then local embedding cosine similarity, displayed as separate measurements. Uses already-computed vectors; no repeat API calls, transcription or download. Metadata-only songs are excluded, and the view reports their count. Identical reference lyrics are **not proof** that two uploaded or linked performances are covers.
+- **Experimental recording search (in Discover covers on YouTube):** record or upload a short sung/spoken phrase, transcribe its words with Parakeet TDT 0.6B v3 on CPU, and search YouTube for *candidate* videos based on those recognized words. Optionally compare the recording against indexed lyrics in Local catalog. This is not melody recognition or internet-wide acoustic matching.
 - **Session-only state:** no database and no persistence. Restarting Gradio clears the catalog; this is intentional for a small demo.
 
 ## Architecture
@@ -26,9 +27,11 @@ flowchart LR
     L -->|Unavailable or no match| ASR[Audio ASR fallback]
     ASR -->|Words detected| E
     ASR -->|No words or download failure| M[Metadata-only record]
-    E --> F[FAISS vector index]\n    F --> Cmp[Compare all catalog lyric pairs]
+    E --> F[FAISS vector index]
+    F --> Cmp[Compare all catalog lyric pairs]
     Q[Recorded sung phrase] --> P[Local Parakeet ASR]
-    P --> QE[Query embedding]
+    P --> YQ[YouTube lyric-phrase search]
+    P --> QE[Optional local query embedding]
     QE --> F
     F --> R[Closest lyric matches]
 ```
@@ -45,7 +48,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe app.py
 ```
 
-The app runs at `http://127.0.0.1:7860` by default. The first **singing-search** request can download the Parakeet model (approximately 670 MB) if it is not cached. If LRCLIB provides lyrics, adding a song does **not** download its YouTube audio or run full-song transcription. Otherwise the app attempts one size/duration-limited download and speech transcription. This fallback can take significantly longer on CPU.
+The app runs at `http://127.0.0.1:7860` by default. The Gradio interface uses a responsive light theme, compact YouTube cards with thumbnails, and paired lyric-comparison cards. The first **singing-search** request can download the Parakeet model (approximately 670 MB) if it is not cached. If LRCLIB provides lyrics, adding a song does **not** download its YouTube audio or run full-song transcription. Otherwise the app attempts one size/duration-limited download and speech transcription. This fallback can take significantly longer on CPU.
 
 ## Testing
 
