@@ -248,7 +248,10 @@ def _catalog_song(
 ) -> Song:
     """Reuse an existing entry; melody features can exist without lyric text."""
     for song in catalog.songs:
-        if song.title.casefold() == title.casefold() and song.artist.casefold() == artist.casefold():
+        if (
+            song.title.casefold() == title.casefold()
+            and song.artist.casefold() == artist.casefold()
+        ):
             return song
     song = Song(title, artist, "", source=source, text_origin="none")
     catalog.add(song)
