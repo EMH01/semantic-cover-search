@@ -64,6 +64,9 @@ class SongIndex:
     def melody_count(self) -> int:
         return len(self._melodies)
 
+    def has_melody(self, song: Song) -> bool:
+        return song in self._melodies
+
     def index_melody(self, song: Song, chroma: np.ndarray) -> None:
         """Keep short pitch-class references only in this user's catalog session."""
         if song not in self._songs:
