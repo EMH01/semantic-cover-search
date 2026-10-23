@@ -1,7 +1,9 @@
 """Semantic Cover Search: online cover discovery and session-only lyric similarity."""
 import os
+import re
 from html import escape
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import gradio as gr
 
@@ -20,6 +22,7 @@ from cover_search.metadata import audio_metadata
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
 from cover_search.services import embed_text, transcribe_audio
+from cover_search.ui_theme import APP_CSS, HERO_HTML
 from cover_search.youtube import (
     download_audio,
     search_youtube_lyrics_fragment,
@@ -246,44 +249,45 @@ def format_results(results):
 
 
 def render_lyric_comparison_cards(comparisons) -> str:
-    """Mobile-friendly cards showing distinct lexical and semantic measures."""
+    """Compact comparison cards; lexical and semantic metrics stay distinct."""
     if not comparisons:
-        return '<p style="opacity:.75;">No song pairs are available to compare.</p>'
+        return '<div class="scs-empty">Add two songs with lyrics to see comparisons.</div>'
     cards = []
     for rank, pair in enumerate(comparisons, start=1):
-        left = escape(pair.first.label)
-        right = escape(pair.second.label)
-        overlap = pair.phrase_overlap * 100
-        # Cosine is not a calibrated probability; do not imply match likelihood.
-        semantic = pair.semantic_similarity * 100
+        left, right = escape(pair.first.label), escape(pair.second.label)
+        lexical = pair.phrase_overlap * 100
+        cosine = pair.semantic_similarity * 100
+        cosine_width = max(0, min(100, cosine))
         first_source = "LRCLIB" if pair.first.text_origin == "lrclib" else "ASR"
         second_source = "LRCLIB" if pair.second.text_origin == "lrclib" else "ASR"
-        qualifier = (
-            '<p style="font-size:.85em;margin:8px 0 0;opacity:.78;">'
-            "Identical indexed text, not proof of identical performances.</p>"
-            if pair.exact_text else ""
+        note = (
+            "Identical reference text does not prove identical performances."
+            if pair.exact_text else
+            "Scores describe indexed text, not verified cover identity."
         )
         cards.append(
-            '<article style="padding:16px;margin:12px 0;border:1px solid '
-            'var(--border-color-primary);border-radius:12px;">'
-            f'<div style="font-size:.85em;opacity:.7;margin-bottom:8px;">Pair {rank}</div>'
-            f'<div style="font-weight:600;overflow-wrap:anywhere;">{left}</div>'
-            f'<div style="opacity:.65;font-size:.85em;">Text: {first_source}</div>'
-            '<div style="text-align:center;opacity:.6;margin:6px 0;">↕</div>'
-            f'<div style="font-weight:600;overflow-wrap:anywhere;">{right}</div>'
-            f'<div style="opacity:.65;font-size:.85em;">Text: {second_source}</div>'
-            '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;">'
-            '<div style="padding:9px 12px;border:1px solid var(--border-color-primary);'
-            'border-radius:8px;min-width:160px;">'
-            '<div style="font-size:.8em;opacity:.7;">Shared lyric phrases</div>'
-            f'<strong>{overlap:.1f}%</strong></div>'
-            '<div style="padding:9px 12px;border:1px solid var(--border-color-primary);'
-            'border-radius:8px;min-width:160px;">'
-            '<div style="font-size:.8em;opacity:.7;">Embedding cosine × 100</div>'
-            f'<strong>{semantic:.1f}</strong></div></div>{qualifier}</article>'
+            '<article class="scs-match">'
+            f'<div class="scs-match-head">Comparison {rank:02d}</div>'
+            f'<div class="scs-track-name">{left}</div>'
+            f'<div class="scs-track-source">Source: {first_source}</div>'
+            '<div class="scs-match-divider"></div>'
+            f'<div class="scs-track-name">{right}</div>'
+            f'<div class="scs-track-source">Source: {second_source}</div>'
+            '<div class="scs-metrics">'
+            '<div class="scs-metric">'
+            '<div class="scs-metric-label">Shared lyric phrases</div>'
+            f'<div class="scs-metric-value">{lexical:.1f}%</div>'
+            f'<div class="scs-meter"><div class="scs-meter-fill" '
+            f'style="width:{lexical:.1f}%"></div></div></div>'
+            '<div class="scs-metric">'
+            '<div class="scs-metric-label">Embedding cosine × 100</div>'
+            f'<div class="scs-metric-value">{cosine:.1f}</div>'
+            '<div class="scs-meter"><div class="scs-meter-fill scs-meter-fill-alt" '
+            f'style="width:{cosine_width:.1f}%"></div></div></div></div>'
+            f'<p class="scs-match-note">{escape(note)}</p>'
+            '</article>'
         )
-    return "".join(cards)
-
+    return '<div class="scs-match-grid">' + "".join(cards) + '</div>'
 
 def compare_catalog_lyrics(catalog: SongIndex, top_pairs: int):
     """Evaluate every eligible pair; render only the best N to avoid long screens."""
@@ -332,24 +336,35 @@ def search_upload(audio_path: str | None, top_k: int, catalog: SongIndex):
 
 
 def render_video_cards(videos: list[dict[str, str]]) -> str:
-    """Create readable, safely escaped cards from third-party video metadata."""
+    """Compact responsive video cards with escaped metadata and thumbnails."""
     if not videos:
-        return "<p>No matching videos found.</p>"
+        return (
+            '<div class="scs-empty">No matching videos found. '
+            'Try another song title or a clearer recorded phrase.</div>'
+        )
     cards = []
     for item in videos:
         title = escape(item["title"])
         channel = escape(item["channel"])
         url = escape(item["url"], quote=True)
+        video_id = parse_qs(urlparse(item["url"]).query).get("v", [""])[0]
+        if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+            img = (
+                f'<img class="scs-video-thumb" loading="lazy" alt="" '
+                f'src="https://i.ytimg.com/vi/{video_id}/mqdefault.jpg">'
+            )
+        else:
+            img = '<div class="scs-video-thumb" aria-hidden="true"></div>'
         cards.append(
-            '<article style="padding:14px 16px;border:1px solid var(--border-color-primary);'
-            'border-radius:10px;margin:10px 0;">'
-            f'<div style="font-weight:600;margin-bottom:6px;">{title}</div>'
-            f'<div style="opacity:.75;font-size:.9em;margin-bottom:9px;">Channel: {channel}</div>'
-            f'<a href="{url}" target="_blank" rel="noopener noreferrer">'
-            'Watch on YouTube ↗</a></article>'
+            '<article class="scs-video">'
+            f'{img}<div class="scs-video-body">'
+            f'<div class="scs-video-title">{title}</div>'
+            f'<div class="scs-video-channel">{channel}</div>'
+            f'<a class="scs-video-link" href="{url}" '
+            'target="_blank" rel="noopener noreferrer">'
+            'Watch on YouTube ↗</a></div></article>'
         )
-    return "".join(cards)
-
+    return '<div class="scs-video-grid">' + "".join(cards) + '</div>'
 
 def search_public_versions(title: str):
     try:
@@ -454,10 +469,17 @@ def add_selected_video(
     )
 
 
-with gr.Blocks(title="Semantic Cover Search") as demo:
+with gr.Blocks(
+    title="Semantic Cover Search",
+    css=APP_CSS,
+    theme=gr.themes.Soft(
+        primary_hue=gr.themes.colors.violet,
+        neutral_hue=gr.themes.colors.slate,
+    ),
+) as demo:
     catalog_state = gr.State(value=SongIndex)
     youtube_results_state = gr.State(value=[])
-    gr.Markdown("# 🎵 Semantic Cover Search")
+    gr.HTML(value=HERO_HTML)
 
     with gr.Tab("Discover covers on YouTube"):
         gr.Markdown(
