@@ -142,9 +142,7 @@ def melody_match(
             # Sum correlations over all 12 pitch classes for each start offset.
             sums = np.zeros(b.shape[0] - query_length + 1, dtype=np.float32)
             for note in range(12):
-                sums += np.correlate(
-                    b[:, note], candidate[::-1, note], mode="valid"
-                )[::-1]
+                sums += np.correlate(b[:, note], candidate[:, note], mode="valid")
             # Select the segment with highest average per voiced query frame.
             averages = sums / np.count_nonzero(valid)
             location = int(np.argmax(averages))
