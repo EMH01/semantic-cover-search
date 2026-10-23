@@ -252,7 +252,10 @@ def format_results(results):
 def render_lyric_comparison_cards(comparisons) -> str:
     """Compact comparison cards; lexical and semantic metrics stay distinct."""
     if not comparisons:
-        return '<div class="scs-empty">No song pairs to compare. Add two songs with lyrics first.</div>'
+        return (
+            '<div class="scs-empty">No song pairs to compare. '
+            'Add two songs with lyrics first.</div>'
+        )
     cards = []
     for rank, pair in enumerate(comparisons, start=1):
         left, right = escape(pair.first.label), escape(pair.second.label)
@@ -282,7 +285,8 @@ def render_lyric_comparison_cards(comparisons) -> str:
             f'style="width:{lexical:.1f}%"></div></div></div>'
             '<div class="scs-metric">'
             '<div class="scs-metric-label" '
-            'title="Cosine similarity between normalized lyric embeddings, multiplied by 100. Not a probability.">'
+            'title="Cosine similarity between normalized lyric embeddings, '
+            'multiplied by 100. Not a probability.">'
             'Semantic similarity ⓘ</div>'
             f'<div class="scs-metric-value">{cosine:.1f}</div>'
             '<div class="scs-meter"><div class="scs-meter-fill scs-meter-fill-alt" '
