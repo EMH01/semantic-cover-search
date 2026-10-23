@@ -131,27 +131,39 @@ def add_known_song(
     text = match.text if match else ""
     origin = "lrclib" if text else "none"
     fallback_error = ""
-    if not text and (fallback_audio_path or fallback_youtube_url):
+    audio_error = ""
+    audio_bytes: bytes | None = None
+    audio_name = ""
+
+    # One bounded audio acquisition per song. Reuse the same bytes for ASR
+    # (only if LRCLIB failed) and for optional melody features (all sources).
+    if fallback_audio_path or fallback_youtube_url:
         if progress is not None:
-            progress(0.35, desc="No reference lyrics; preparing audio…")
+            progress(0.35, desc="Preparing audio for melody analysis…")
         try:
             if fallback_audio_path:
-                file = Path(fallback_audio_path)
-                audio_bytes, audio_name = read_audio(str(file)), file.name
+                path = Path(fallback_audio_path)
+                audio_bytes, audio_name = read_audio(str(path)), path.name
             else:
-                # yt-dlp enforces duration and file-size bounds.
                 audio = download_audio(fallback_youtube_url)
                 audio_bytes, audio_name = audio.data, audio.filename
+        except Exception as exc:
+            # A blocked/unavailable video cannot prevent lyrics from being indexed.
+            audio_error = type(exc).__name__
+
+    if not text and audio_bytes is not None:
+        try:
             if progress is not None:
                 progress(0.62, desc="Transcribing audio with local ASR…")
             text = transcribe(audio_bytes, audio_name).strip()
             if not text:
-                raise ValueError("The speech recognizer did not detect any words.")
+                raise ValueError("The recognizer did not detect any words.")
             origin = "asr"
         except Exception as exc:
-            # A poor recording or missing YouTube format must not prevent saving metadata.
             fallback_error = type(exc).__name__
             text = ""
+    elif not text and audio_error:
+        fallback_error = audio_error
 
     display_text = text
     embedding = None
@@ -173,21 +185,25 @@ def add_known_song(
     except ValueError as exc:
         raise gr.Error(str(exc)) from exc
 
-    # Only uploaded files provide audio without fetching extra material.
-    # Melody features are optional and never block the song catalog.
+    # Audio from uploads AND YouTube contributes optional melody features.
+    # Keep only pitch-class frames; never retain raw media in SongIndex.
     melody_problem = ""
-    if source == "upload" and fallback_audio_path:
+    if audio_bytes is not None:
         try:
             if progress is not None:
-                progress(0.9, desc="Analyzing audio for melody comparison…")
-            features = extract_chroma(read_audio(fallback_audio_path))
+                progress(0.9, desc="Extracting melody features from audio…")
+            features = extract_chroma(audio_bytes)
             catalog.index_melody(song, features)
-        except (MelodyError, ValueError, OSError) as exc:
+        except (MelodyError, ValueError, OSError, RuntimeError, ImportError) as exc:
             melody_problem = type(exc).__name__
 
     status = f"**Added to local catalog:** {escape(song.label)}."
     if catalog.has_melody(song):
         status += " Melody features available for comparisons."
+    elif audio_error:
+        status += (
+            f" Melody unavailable: audio could not be obtained ({escape(audio_error)})."
+        )
     elif melody_problem:
         status += " Melody extraction was unavailable; lyric analysis is unaffected."
     if origin == "lrclib" and match is not None:
@@ -354,7 +370,7 @@ def compare_catalog_lyrics(catalog: SongIndex, top_pairs: int):
         return (
             f"**{eligible} of {total} songs have text or audio features.** "
             "Add at least two comparable songs. "
-            "YouTube links alone do not supply melody data.",
+            "Audio unavailable from YouTube may leave melody unmeasured.",
             render_lyric_comparison_cards([]),
         )
     displayed = pairs[:max(1, min(int(top_pairs), 50))]
@@ -712,8 +728,8 @@ with gr.Blocks(
         )
         gr.Markdown(
             "Compare shared lyric phrases, semantic meaning and available audio "
-            "melodies. Melody is measured automatically for uploaded songs; "
-            "YouTube links without audio show N/A.",
+            "melodies. Uploaded files and accessible YouTube audio are analyzed "
+            "automatically; unavailable recordings display N/A.",
             elem_classes=["scs-intro"],
         )
         comparison_top = gr.Slider(
