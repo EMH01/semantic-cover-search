@@ -145,6 +145,19 @@ APP_CSS = """
 .gradio-container .scs-panel textarea {
     border-radius: 9px;
 }
+/* Reserve a dedicated, non-overlapping area for the one native loading indicator. */
+.gradio-container .scs-status {
+    position: relative;
+    isolation: isolate;
+    min-height: 52px;
+    padding: 12px 2px 16px;
+    margin: 8px 0 18px;
+    overflow-wrap: anywhere;
+}
+.gradio-container .scs-status p {
+    margin: 0;
+    line-height: 1.6;
+}
 .gradio-container .scs-dataframe {
     border-radius: 13px;
     overflow: hidden;
