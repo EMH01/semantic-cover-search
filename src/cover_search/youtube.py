@@ -1,6 +1,6 @@
+import re
 from dataclasses import dataclass
 from pathlib import Path
-import re
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlparse
 
