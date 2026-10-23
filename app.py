@@ -208,9 +208,10 @@ def add_known_song(
         progress(1.0, desc="Catalog updated")
     return status, catalog_rows(catalog), catalog, view
 
+# Gradio injects Progress from a constructed default; Ruff B008 is not applicable.
 def add_upload(
     audio_path: str | None, title: str, artist: str, catalog: SongIndex,
-    progress: gr.Progress = gr.Progress(),
+    progress: gr.Progress = gr.Progress()  # noqa: B008,
 ):
     if not audio_path:
         raise gr.Error("Upload an audio file first.")
@@ -230,7 +231,7 @@ def add_upload(
 
 
 def add_youtube(
-    url: str, catalog: SongIndex, progress: gr.Progress = gr.Progress()
+    url: str, catalog: SongIndex, progress: gr.Progress = gr.Progress()  # noqa: B008
 ):
     if not url.strip():
         raise gr.Error("Enter a YouTube URL first.")
@@ -266,7 +267,7 @@ def _catalog_song(
 
 def index_uploaded_melody(
     audio_path: str | None, title: str, artist: str, catalog: SongIndex,
-    progress: gr.Progress = gr.Progress(),
+    progress: gr.Progress = gr.Progress()  # noqa: B008,
 ):
     if not audio_path:
         raise gr.Error("Upload a song before analyzing its melody.")
@@ -290,7 +291,7 @@ def index_uploaded_melody(
 
 
 def index_youtube_melody(
-    url: str, catalog: SongIndex, progress: gr.Progress = gr.Progress()
+    url: str, catalog: SongIndex, progress: gr.Progress = gr.Progress()  # noqa: B008
 ):
     if not url.strip():
         raise gr.Error("Paste a YouTube URL to analyze its melody.")
@@ -319,7 +320,7 @@ def index_youtube_melody(
 
 def search_recorded_melody(
     audio_path: str | None, top_k: int, catalog: SongIndex,
-    progress: gr.Progress = gr.Progress(),
+    progress: gr.Progress = gr.Progress()  # noqa: B008,
 ):
     if not audio_path:
         raise gr.Error("Record a short melody first.")
@@ -512,7 +513,7 @@ def search_public_versions(title: str):
 
 
 def search_recording_on_youtube(
-    audio_path: str | None, progress: gr.Progress = gr.Progress()
+    audio_path: str | None, progress: gr.Progress = gr.Progress()  # noqa: B008
 ):
     """Transcribe a recording and search YouTube for lyric-text candidates.
 
@@ -560,7 +561,7 @@ def search_recording_on_youtube(
 
 def add_selected_video(
     selection: str | None, videos: list[dict], catalog: SongIndex,
-    progress: gr.Progress = gr.Progress(),
+    progress: gr.Progress = gr.Progress()  # noqa: B008,
 ):
     if selection is None:
         raise gr.Error("Select a video from the search results first.")
