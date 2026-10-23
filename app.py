@@ -483,9 +483,9 @@ with gr.Blocks(
 
     with gr.Tab("Discover covers on YouTube"):
         gr.Markdown(
-            Find cover video candidates on YouTube by song title. "
-            "Channels identify uploaders; verify the performers by opening each video. "
-            "No personal catalog or API key required."
+            "Search by title or use a short recorded phrase to find candidates. "
+            "Results link to YouTube; check the performer before adding a song.",
+            elem_classes=["scs-intro"],
         )
         public_title = gr.Textbox(label="Song title", placeholder="e.g. Hallelujah")
         public_search = gr.Button(
@@ -664,7 +664,6 @@ with gr.Blocks(
             outputs=[add_status, catalog_table, catalog_state, lyrics_view],
             show_progress="minimal",
         )
-
 
 
 if __name__ == "__main__":
