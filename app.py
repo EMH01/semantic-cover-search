@@ -81,7 +81,13 @@ def catalog_rows(catalog: SongIndex) -> list[list[str]]:
         "none": "Metadata only",
     }
     return [
-        [song.title, song.artist, song.source, names.get(song.text_origin, "Metadata only")]
+        [
+            song.title,
+            song.artist,
+            song.source,
+            "Ready" if catalog.has_melody(song) else "Not analyzed",
+            names.get(song.text_origin, "Metadata only"),
+        ]
         for song in catalog.songs
     ]
 
@@ -742,8 +748,8 @@ with gr.Blocks(
         with gr.Accordion("Lyrics or automatic transcription · latest song", open=False):
             lyrics_view = gr.HTML(value=render_transcription(None))
         catalog_table = gr.Dataframe(
-            headers=["Title", "Performer / uploader", "Source", "Searchable"],
-            datatype=["str", "str", "str", "str"],
+            headers=["Title", "Performer / uploader", "Source", "Melody", "Lyrics"],
+            datatype=["str", "str", "str", "str", "str"],
             interactive=False,
             label="Session catalog",
             elem_classes=["scs-dataframe"],
