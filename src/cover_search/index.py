@@ -58,7 +58,7 @@ class SongIndex:
 
     def compare_all(self) -> list[LyricComparison]:
         """Rank all unique pairs that have text embeddings, excluding metadata-only."""
-        return compare_all_lyrics(self._indexed_songs, self._vectors)
+        return compare_all_lyrics(self._indexed_songs, self._vectors, self._melodies)
 
     @property
     def melody_count(self) -> int:
