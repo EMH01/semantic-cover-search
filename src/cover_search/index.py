@@ -2,6 +2,7 @@ import faiss
 import numpy as np
 
 from .comparison import LyricComparison, compare_all_lyrics
+from .melody import MelodyError, melody_match
 from .models import Song
 
 
@@ -13,6 +14,7 @@ class SongIndex:
         self._songs: list[Song] = []
         self._indexed_songs: list[Song] = []
         self._vectors: list[np.ndarray] = []
+        self._melodies: dict[Song, np.ndarray] = {}
 
     @property
     def songs(self) -> tuple[Song, ...]:
@@ -57,6 +59,41 @@ class SongIndex:
     def compare_all(self) -> list[LyricComparison]:
         """Rank all unique pairs that have text embeddings, excluding metadata-only."""
         return compare_all_lyrics(self._indexed_songs, self._vectors)
+
+    @property
+    def melody_count(self) -> int:
+        return len(self._melodies)
+
+    def index_melody(self, song: Song, chroma: np.ndarray) -> None:
+        """Keep short pitch-class references only in this user's catalog session."""
+        if song not in self._songs:
+            raise ValueError("Add this song to the local catalog first.")
+        if song not in self._melodies and len(self._melodies) >= 12:
+            raise ValueError("The experimental catalog supports up to 12 melody references.")
+        features = np.asarray(chroma, dtype=np.float32)
+        if (
+            features.ndim != 2
+            or features.shape[1] != 12
+            or features.shape[0] < 7
+            or not np.all(np.isfinite(features))
+        ):
+            raise MelodyError("Melody reference must contain valid pitch-class frames.")
+        self._melodies[song] = features.copy()
+
+    def search_melody(
+        self, query: np.ndarray, top_k: int = 5
+    ) -> list[tuple[Song, float, float, int]]:
+        if top_k < 1:
+            raise ValueError("top_k must be positive.")
+        scores = []
+        for song, reference in self._melodies.items():
+            try:
+                score, offset, shift = melody_match(query, reference)
+                scores.append((song, score, offset, shift))
+            except MelodyError:
+                continue
+        scores.sort(key=lambda item: item[1], reverse=True)
+        return scores[:top_k]
 
     @staticmethod
     def _prepare_vector(embedding: np.ndarray) -> np.ndarray:
