@@ -655,7 +655,8 @@ with gr.Blocks(
                     gr.Markdown("#### Compare recording with your catalog")
                     top_k = gr.Slider(1, 10, value=5, step=1, label="Local top results")
                     search_file_button = gr.Button(
-                        "Compare recording with catalog (lyrics + melody)", elem_classes=["scs-secondary"]
+                        "Compare recording with catalog (lyrics + melody)",
+                        elem_classes=["scs-secondary"],
                     )
                     results_table = gr.Dataframe(
                         headers=["Rank", "Title", "Performer / uploader", "Similarity", "Source"],
