@@ -20,6 +20,7 @@ from cover_search.lyrics import (
     title_from_video,
 )
 from cover_search.metadata import audio_metadata
+from cover_search.melody import MAX_QUERY_SECONDS, MelodyError, extract_chroma
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
 from cover_search.services import embed_text, transcribe_audio
@@ -239,6 +240,105 @@ def add_youtube(
         lyric_title=title_from_video(video["title"]),
         fallback_youtube_url=video["url"],
         progress=progress,
+    )
+
+
+def _catalog_song(
+    catalog: SongIndex, title: str, artist: str, source: str
+) -> Song:
+    """Reuse an existing entry; melody features can exist without lyric text."""
+    for song in catalog.songs:
+        if song.title.casefold() == title.casefold() and song.artist.casefold() == artist.casefold():
+            return song
+    song = Song(title, artist, "", source=source, text_origin="none")
+    catalog.add(song)
+    return song
+
+
+def index_uploaded_melody(
+    audio_path: str | None, title: str, artist: str, catalog: SongIndex,
+    progress: gr.Progress = gr.Progress(),
+):
+    if not audio_path:
+        raise gr.Error("Upload a song before analyzing its melody.")
+    progress(0.12, desc="Reading audio for melody analysis…")
+    data = read_audio(audio_path)
+    try:
+        features = extract_chroma(data)
+    except MelodyError as exc:
+        raise gr.Error(str(exc)) from exc
+    detected_title, detected_artist = audio_metadata(audio_path)
+    title = title.strip() or detected_title
+    artist = artist.strip() or detected_artist or "Unknown performer"
+    song = _catalog_song(catalog, title, artist, "upload")
+    catalog.index_melody(song, features)
+    progress(1.0, desc="Reference melody indexed")
+    return (
+        f"**Melody ready:** {escape(song.label)}. "
+        "A short hummed or sung fragment can now be compared with it.",
+        catalog_rows(catalog), catalog,
+    )
+
+
+def index_youtube_melody(
+    url: str, catalog: SongIndex, progress: gr.Progress = gr.Progress()
+):
+    if not url.strip():
+        raise gr.Error("Paste a YouTube URL to analyze its melody.")
+    progress(0.08, desc="Reading video details…")
+    try:
+        video = video_metadata(url)
+        progress(0.22, desc="Downloading bounded reference audio…")
+        audio = download_audio(video["url"])
+        progress(0.65, desc="Extracting musical pitch classes…")
+        features = extract_chroma(audio.data)
+    except Exception as exc:
+        raise gr.Error(
+            "Melody reference extraction failed. Check the link or try a local audio file."
+        ) from exc
+    song = _catalog_song(
+        catalog, video["title"], f"Uploader: {video['channel']}", "youtube"
+    )
+    catalog.index_melody(song, features)
+    progress(1.0, desc="Reference melody indexed")
+    return (
+        f"**Melody ready:** {escape(song.label)}. "
+        "The audio was processed transiently, not stored.",
+        catalog_rows(catalog), catalog,
+    )
+
+
+def search_recorded_melody(
+    audio_path: str | None, top_k: int, catalog: SongIndex,
+    progress: gr.Progress = gr.Progress(),
+):
+    if not audio_path:
+        raise gr.Error("Record a short melody first.")
+    if not catalog.melody_count:
+        raise gr.Error(
+            "Analyze at least one uploaded song or YouTube link as a melody reference first."
+        )
+    progress(0.1, desc="Extracting pitches from your recording…")
+    try:
+        chroma = extract_chroma(
+            read_audio(audio_path), max_seconds=MAX_QUERY_SECONDS
+        )
+        progress(0.7, desc="Comparing against catalog melodies…")
+        matches = catalog.search_melody(chroma, int(top_k))
+    except MelodyError as exc:
+        raise gr.Error(str(exc)) from exc
+    if not matches:
+        return "No usable melody alignment. Try a shorter, clearer recording.", []
+    rows = [
+        [index, song.title, song.artist, f"{score * 100:.1f}", f"{offset:.1f} s"]
+        for index, (song, score, offset, _shift) in enumerate(matches, start=1)
+    ]
+    progress(1.0, desc="Melody comparison finished")
+    return (
+        f"Compared the recording against {catalog.melody_count} analyzed "
+        "melodies in this session. **Alignment score is not a probability** "
+        "or proof of song identity; listen to the candidate to verify.",
+        rows,
     )
 
 
