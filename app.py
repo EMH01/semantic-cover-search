@@ -305,8 +305,9 @@ def compare_catalog_lyrics(catalog: SongIndex, top_pairs: int):
         )
     displayed = pairs[:max(1, min(int(top_pairs), 50))]
     excluded_label = "song" if excluded == 1 else "songs"
+    pair_label = "pair" if len(pairs) == 1 else "pairs"
     note = (
-        f"**{len(pairs)} pairs compared** · {eligible} songs with lyrics · "
+        f"**{len(pairs)} {pair_label} compared** · {eligible} songs with lyrics · "
         f"{excluded} metadata-only {excluded_label} excluded. "
         f"Showing {len(displayed)} highest-ranked pairs, prioritizing shared phrases. "
         "Scores are text similarities, not confirmed cover relationships."
