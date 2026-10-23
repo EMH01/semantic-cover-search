@@ -20,7 +20,7 @@ def test_comparison_view_contains_every_pair_count_and_source_labels():
     catalog.add(Song("No lyrics", "Nobody", "", text_origin="none"))
     status, html = compare_catalog_lyrics(catalog, 10)
 
-    assert "1 pairs compared" in status
+    assert "1 pair compared" in status
     assert "1 metadata-only song excluded" in status
     assert "Hallelujah" in html
     assert "Text: LRCLIB" in html
