@@ -245,14 +245,26 @@ APP_CSS = """
     text-transform: uppercase;
     margin: 0 0 12px;
 }
-.scs-track-name { font-size: .92rem; font-weight: 710; line-height: 1.42; color: #1b2740; overflow-wrap: anywhere; }
+.scs-track-name {
+    font-size: .92rem;
+    font-weight: 710;
+    line-height: 1.42;
+    color: #1b2740;
+    overflow-wrap: anywhere;
+}
 .scs-track-source { font-size: .75rem; color: #717d92; margin-top: 3px; }
 .scs-match-divider { border-top: 1px dashed #d7dded; margin: 13px 0; }
 .scs-metrics { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
 .scs-metric { min-width: 115px; flex: 1; }
 .scs-metric-label { color: #717d92; font-size: .7rem; margin-bottom: 5px; }
 .scs-metric-value { font-size: 1.25rem; font-weight: 770; color: #252e4b; }
-.scs-meter { background: #edf0f9; border-radius: 30px; height: 5px; overflow: hidden; margin-top: 7px; }
+.scs-meter {
+    background: #edf0f9;
+    border-radius: 30px;
+    height: 5px;
+    overflow: hidden;
+    margin-top: 7px;
+}
 .scs-meter-fill { height: 100%; border-radius: 30px; background: #6254da; }
 .scs-meter-fill-alt { background: #7a90c4; }
 .scs-match-note { margin: 12px 0 0; font-size: .77rem; color: #747b92; line-height: 1.5; }
