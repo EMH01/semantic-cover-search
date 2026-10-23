@@ -42,7 +42,81 @@ def test_audio_upload_indexes_melody_automatically(tmp_path, monkeypatch):
     assert rows[0][4] == "Reference lyrics (LRCLIB)"
 
 
-def test_youtube_link_never_adds_melody_without_audio(monkeypatch):
+def test_youtube_link_automatically_indexes_melody(monkeypatch):
+    import app
+
+    monkeypatch.setattr(
+        app, "video_metadata",
+        lambda _: {
+            "title": "Hallelujah", "channel": "Singer",
+            "url": "https://www.youtube.com/watch?v=abcd",
+        },
+    )
+    monkeypatch.setattr(
+        app, "find_lyrics",
+        lambda *args: LyricsMatch(
+            "Hallelujah", "Singer", "Example lyrics",
+            "https://lrclib.net/api/get/1",
+        ),
+    )
+    monkeypatch.setattr(app, "embed", lambda _: np.array([1.0, 0.0]))
+    download_urls = []
+
+    def get_audio(url):
+        download_urls.append(url)
+        return type("YouTubeAudio", (), {
+            "data": b"audio", "filename": "song.webm",
+        })()
+
+    monkeypatch.setattr(app, "download_audio", get_audio)
+    monkeypatch.setattr(app, "extract_chroma", lambda data: _notes())
+    monkeypatch.setattr(
+        app, "transcribe",
+        lambda *args: (_ for _ in ()).throw(AssertionError("ASR must not run")),
+    )
+    catalog = SongIndex()
+    _status, rows, _, _ = app.add_youtube(
+        "https://www.youtube.com/watch?v=abcd",
+        catalog, progress=lambda *args, **kwargs: None,
+    )
+    assert len(download_urls) == 1
+    assert catalog.melody_count == 1
+    assert catalog.indexed_count == 1
+    assert rows[0][3] == "Ready"
+
+
+def test_youtube_song_uses_single_download_for_asr_and_melody(monkeypatch):
+    import app
+
+    monkeypatch.setattr(
+        app, "video_metadata",
+        lambda _: {
+            "title": "Unknown song", "channel": "Singer",
+            "url": "https://www.youtube.com/watch?v=abcd",
+        },
+    )
+    monkeypatch.setattr(app, "find_lyrics", lambda *args: None)
+    downloads = []
+    monkeypatch.setattr(
+        app, "download_audio",
+        lambda url: (downloads.append(url) or type("Audio", (), {
+            "data": b"audio", "filename": "song.webm",
+        })()),
+    )
+    monkeypatch.setattr(app, "transcribe", lambda data, filename: "Sung words")
+    monkeypatch.setattr(app, "extract_chroma", lambda data: _notes())
+    monkeypatch.setattr(app, "embed", lambda _: np.array([1.0, 0.0]))
+    catalog = SongIndex()
+    _status, rows, _, _ = app.add_youtube(
+        "https://www.youtube.com/watch?v=abcd",
+        catalog, progress=lambda *args, **kwargs: None,
+    )
+    assert len(downloads) == 1
+    assert rows[0][3] == "Ready"
+    assert rows[0][-1] == "Automatic transcription"
+
+
+def test_youtube_melody_failure_does_not_break_lyrics(monkeypatch):
     import app
 
     monkeypatch.setattr(
@@ -62,15 +136,23 @@ def test_youtube_link_never_adds_melody_without_audio(monkeypatch):
     monkeypatch.setattr(app, "embed", lambda _: np.array([1.0, 0.0]))
     monkeypatch.setattr(
         app, "download_audio",
-        lambda *_: (_ for _ in ()).throw(AssertionError("No audio download")),
+        lambda url: type("Audio", (), {
+            "data": b"audio", "filename": "song.webm",
+        })(),
+    )
+    monkeypatch.setattr(
+        app, "extract_chroma",
+        lambda data: (_ for _ in ()).throw(app.MelodyError("No melody")),
     )
     catalog = SongIndex()
-    _status, rows, _, _ = app.add_youtube(
+    status, rows, _, _ = app.add_youtube(
         "https://www.youtube.com/watch?v=abcd",
         catalog, progress=lambda *args, **kwargs: None,
     )
+    assert catalog.indexed_count == 1
     assert catalog.melody_count == 0
     assert rows[0][3] == "Not analyzed"
+    assert "Melody extraction was unavailable" in status
 
 
 def test_mic_local_comparison_uses_melody_when_asr_fails(monkeypatch):
