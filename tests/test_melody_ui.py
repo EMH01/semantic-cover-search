@@ -102,3 +102,30 @@ def test_melody_is_third_metric_not_standalone_link_action():
     assert "Analyze this audio as a melody reference" not in source
     assert "Find matching melodies" not in source
     assert 'sources=["microphone"]' in source
+
+
+def test_audio_melody_failure_does_not_break_lyric_index(tmp_path, monkeypatch):
+    import app
+
+    audio = tmp_path / "song.wav"
+    audio.write_bytes(b"placeholder")
+    monkeypatch.setattr(app, "audio_metadata", lambda _: ("Song", "Singer"))
+    monkeypatch.setattr(app, "read_audio", lambda _: b"audio")
+    monkeypatch.setattr(
+        app, "extract_chroma",
+        lambda *_: (_ for _ in ()).throw(app.MelodyError("No clear pitch")),
+    )
+    monkeypatch.setattr(
+        app, "find_lyrics",
+        lambda *args: LyricsMatch(
+            "Song", "Singer", "A short example lyric", "https://lrclib.net/api/get/1"
+        ),
+    )
+    monkeypatch.setattr(app, "embed", lambda text: np.array([1.0, 0.0]))
+    status, rows, catalog, _view = app.add_upload(
+        str(audio), "", "", SongIndex(), progress=lambda *args, **kwargs: None
+    )
+    assert "Melody extraction was unavailable" in status
+    assert catalog.indexed_count == 1
+    assert catalog.melody_count == 0
+    assert rows[0][-1] == "Reference lyrics (LRCLIB)"
