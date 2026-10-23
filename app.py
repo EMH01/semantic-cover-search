@@ -19,7 +19,7 @@ from cover_search.lyrics import (
     render_transcription,
     title_from_video,
 )
-from cover_search.melody import MAX_QUERY_SECONDS, MelodyError, extract_chroma
+from cover_search.melody import MelodyError, extract_chroma
 from cover_search.metadata import audio_metadata
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
@@ -173,7 +173,23 @@ def add_known_song(
     except ValueError as exc:
         raise gr.Error(str(exc)) from exc
 
+    # Only uploaded files provide audio without fetching extra material.
+    # Melody features are optional and never block the song catalog.
+    melody_problem = ""
+    if source == "upload" and fallback_audio_path:
+        try:
+            if progress is not None:
+                progress(0.9, desc="Analyzing audio for melody comparison…")
+            features = extract_chroma(read_audio(fallback_audio_path))
+            catalog.index_melody(song, features)
+        except (MelodyError, ValueError, OSError) as exc:
+            melody_problem = type(exc).__name__
+
     status = f"**Added to local catalog:** {escape(song.label)}."
+    if catalog.has_melody(song):
+        status += " Melody features available for comparisons."
+    elif melody_problem:
+        status += " Melody extraction was unavailable; lyric analysis is unaffected."
     if origin == "lrclib" and match is not None:
         status += (
             f" Reference lyrics: **{escape(match.title)} — "
@@ -247,108 +263,6 @@ def add_youtube(
         lyric_title=title_from_video(video["title"]),
         fallback_youtube_url=video["url"],
         progress=progress,
-    )
-
-
-def _catalog_song(
-    catalog: SongIndex, title: str, artist: str, source: str
-) -> Song:
-    """Reuse an existing entry; melody features can exist without lyric text."""
-    for song in catalog.songs:
-        if (
-            song.title.casefold() == title.casefold()
-            and song.artist.casefold() == artist.casefold()
-        ):
-            return song
-    song = Song(title, artist, "", source=source, text_origin="none")
-    catalog.add(song)
-    return song
-
-
-def index_uploaded_melody(
-    audio_path: str | None, title: str, artist: str, catalog: SongIndex,
-    progress: gr.Progress = gr.Progress()  # noqa: B008,
-):
-    if not audio_path:
-        raise gr.Error("Upload a song before analyzing its melody.")
-    progress(0.12, desc="Reading audio for melody analysis…")
-    data = read_audio(audio_path)
-    try:
-        features = extract_chroma(data)
-    except MelodyError as exc:
-        raise gr.Error(str(exc)) from exc
-    detected_title, detected_artist = audio_metadata(audio_path)
-    title = title.strip() or detected_title
-    artist = artist.strip() or detected_artist or "Unknown performer"
-    song = _catalog_song(catalog, title, artist, "upload")
-    catalog.index_melody(song, features)
-    progress(1.0, desc="Reference melody indexed")
-    return (
-        f"**Melody ready:** {escape(song.label)}. "
-        "A short hummed or sung fragment can now be compared with it.",
-        catalog_rows(catalog), catalog,
-    )
-
-
-def index_youtube_melody(
-    url: str, catalog: SongIndex, progress: gr.Progress = gr.Progress()  # noqa: B008
-):
-    if not url.strip():
-        raise gr.Error("Paste a YouTube URL to analyze its melody.")
-    progress(0.08, desc="Reading video details…")
-    try:
-        video = video_metadata(url)
-        progress(0.22, desc="Downloading bounded reference audio…")
-        audio = download_audio(video["url"])
-        progress(0.65, desc="Extracting musical pitch classes…")
-        features = extract_chroma(audio.data)
-    except Exception as exc:
-        raise gr.Error(
-            "Melody reference extraction failed. Check the link or try a local audio file."
-        ) from exc
-    song = _catalog_song(
-        catalog, video["title"], f"Uploader: {video['channel']}", "youtube"
-    )
-    catalog.index_melody(song, features)
-    progress(1.0, desc="Reference melody indexed")
-    return (
-        f"**Melody ready:** {escape(song.label)}. "
-        "The audio was processed transiently, not stored.",
-        catalog_rows(catalog), catalog,
-    )
-
-
-def search_recorded_melody(
-    audio_path: str | None, top_k: int, catalog: SongIndex,
-    progress: gr.Progress = gr.Progress()  # noqa: B008,
-):
-    if not audio_path:
-        raise gr.Error("Record a short melody first.")
-    if not catalog.melody_count:
-        raise gr.Error(
-            "Analyze at least one uploaded song or YouTube link as a melody reference first."
-        )
-    progress(0.1, desc="Extracting pitches from your recording…")
-    try:
-        chroma = extract_chroma(
-            read_audio(audio_path), max_seconds=MAX_QUERY_SECONDS
-        )
-        progress(0.7, desc="Comparing against catalog melodies…")
-        matches = catalog.search_melody(chroma, int(top_k))
-    except MelodyError as exc:
-        raise gr.Error(str(exc)) from exc
-    if not matches:
-        return "No usable melody alignment. Try a shorter, clearer recording.", []
-    rows = [
-        [index, song.title, song.artist, f"{score * 100:.1f}", f"{offset:.1f} s"]
-        for index, (song, score, offset, _shift) in enumerate(matches, start=1)
-    ]
-    progress(1.0, desc="Melody comparison finished")
-    return (
-        f"Compared the recording against {catalog.melody_count} analyzed "
-        "melodies in this session. **Alignment score is not a probability** "
-        "or proof of song identity; listen to the candidate to verify.",
-        rows,
     )
 
 
@@ -657,11 +571,7 @@ with gr.Blocks(
                 add_file_button = gr.Button(
                     "Add song to catalog", variant="primary", elem_classes=["scs-primary"]
                 )
-                upload_melody_button = gr.Button(
-                    "Analyze this audio as a melody reference",
-                    elem_classes=["scs-secondary"],
-                )
-                upload_melody_status = gr.Markdown(elem_classes=["scs-status"])
+
             with gr.Column(elem_classes=["scs-panel"]):
                 gr.Markdown(
                     "### Add a song from YouTube", elem_classes=["scs-section-title"]
@@ -670,21 +580,12 @@ with gr.Blocks(
                 add_url_button = gr.Button(
                     "Add link to catalog", elem_classes=["scs-secondary"]
                 )
-                url_melody_button = gr.Button(
-                    "Analyze this YouTube melody (experimental)",
-                    elem_classes=["scs-secondary"],
-                )
-                url_melody_status = gr.Markdown(elem_classes=["scs-status"])
-                gr.Markdown(
-                    "Melody reference analysis is optional and downloads the audio "
-                    "only when you request it. The catalog keeps features, not audio.",
-                    elem_classes=["scs-intro"],
-                )
+
                 with gr.Accordion("Search by singing or humming · experimental", open=False):
                     gr.Markdown(
-                        "Record a short phrase to search YouTube by recognized words, "
-                        "or compare its musical pattern with analyzed catalog recordings. "
-                        "YouTube searches are lyric-based; melody matching is local only."
+                        "Record a phrase to find candidates on YouTube from recognized "
+                        "words, or compare it with the local catalog. Audio uploads "
+                        "also contribute an experimental melody similarity metric."
                     )
                     query_file = gr.Audio(
                         type="filepath",
@@ -698,21 +599,6 @@ with gr.Blocks(
                         label="Words recognized from your recording (may be inaccurate)",
                         lines=3,
                         interactive=False,
-                    )
-                    gr.Markdown("#### Find similar melodies in your catalog")
-                    melody_search_button = gr.Button(
-                        "Find matching melodies",
-                        elem_classes=["scs-primary"],
-                    )
-                    melody_search_status = gr.Markdown()
-                    melody_results_table = gr.Dataframe(
-                        headers=[
-                            "Rank", "Song", "Performer / uploader",
-                            "Melody alignment × 100", "Matched time",
-                        ],
-                        datatype=["number", "str", "str", "str", "str"],
-                        interactive=False,
-                        label="Experimental melody matches",
                     )
                     gr.Markdown("#### Compare recognized words with catalog lyrics")
                     top_k = gr.Slider(1, 10, value=5, step=1, label="Local top results")
@@ -759,8 +645,9 @@ with gr.Blocks(
             "### Find songs with similar lyrics", elem_classes=["scs-section-title"]
         )
         gr.Markdown(
-            "Compare every available song pair using shared lyric phrases and "
-            "cached semantic embeddings. No further audio processing is needed.",
+            "Compare shared lyric phrases, semantic meaning and available audio "
+            "melodies. Melody is measured automatically for uploaded songs; "
+            "YouTube links without audio show N/A.",
             elem_classes=["scs-intro"],
         )
         comparison_top = gr.Slider(
@@ -778,26 +665,6 @@ with gr.Blocks(
             compare_catalog_lyrics,
             inputs=[catalog_state, comparison_top],
             outputs=[comparison_status, comparison_results],
-            show_progress="minimal",
-        )
-        upload_melody_button.click(
-            index_uploaded_melody,
-            inputs=[add_file, add_title, add_artist, catalog_state],
-            outputs=[upload_melody_status, catalog_table, catalog_state],
-            show_progress="full",
-            show_progress_on=[upload_melody_status],
-        )
-        url_melody_button.click(
-            index_youtube_melody,
-            inputs=[add_url, catalog_state],
-            outputs=[url_melody_status, catalog_table, catalog_state],
-            show_progress="full",
-            show_progress_on=[url_melody_status],
-        )
-        melody_search_button.click(
-            search_recorded_melody,
-            inputs=[query_file, top_k, catalog_state],
-            outputs=[melody_search_status, melody_results_table],
             show_progress="minimal",
         )
         record_search_button.click(
