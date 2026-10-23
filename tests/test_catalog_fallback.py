@@ -7,7 +7,7 @@ from cover_search.lyrics import LyricsLookupError, LyricsMatch
 from cover_search.youtube import YouTubeAudio
 
 
-def test_reference_lyrics_do_not_trigger_youtube_download(monkeypatch):
+def test_reference_lyrics_downloads_once_for_melody_without_asr(monkeypatch):
     import app
 
     cat = SongIndex()
@@ -15,24 +15,71 @@ def test_reference_lyrics_do_not_trigger_youtube_download(monkeypatch):
         app,
         "find_lyrics",
         lambda *args: LyricsMatch(
-            "Hallelujah", "Leonard Cohen", "Reference lyric words", "https://lrclib.net/api/get/1"
+            "Hallelujah", "Leonard Cohen", "Reference lyric words",
+            "https://lrclib.net/api/get/1",
         ),
     )
+    downloads = []
 
-    def unexpectedly_download(*args):
-        raise AssertionError("No download should happen when reference lyrics are found")
+    def get_audio(url):
+        downloads.append(url)
+        return YouTubeAudio("Hallelujah", "Artist", "video.webm", b"audio")
 
-    monkeypatch.setattr(app, "download_audio", unexpectedly_download)
+    monkeypatch.setattr(app, "download_audio", get_audio)
+    monkeypatch.setattr(
+        app, "transcribe",
+        lambda *args: (_ for _ in ()).throw(AssertionError("ASR must not run")),
+    )
+    monkeypatch.setattr(
+        app, "extract_chroma",
+        lambda data: np.ones((12, 12), dtype=np.float32),
+    )
     monkeypatch.setattr(app, "embed", lambda text: np.array([1.0, 0.0]))
 
     status, rows, _, view = app.add_known_song(
         cat, "Hallelujah (Cover)", "Uploader: Singer", "youtube",
-        lyric_title="Hallelujah", fallback_youtube_url="https://www.youtube.com/watch?v=123",
+        lyric_title="Hallelujah",
+        fallback_youtube_url="https://www.youtube.com/watch?v=123",
     )
+    assert len(downloads) == 1
     assert cat.songs[0].text_origin == "lrclib"
     assert cat.indexed_count == 1
-    assert "LRCLIB" in status
-    assert "Reference lyrics" in rows[0][-1]
+    assert cat.melody_count == 1
+    assert rows[0][3] == "Ready"
+    assert "Melody features available" in status
+    assert "View source" in view
+
+
+def test_blocked_youtube_audio_keeps_reference_lyrics(monkeypatch):
+    import app
+
+    cat = SongIndex()
+    monkeypatch.setattr(
+        app, "find_lyrics",
+        lambda *args: LyricsMatch(
+            "Hallelujah", "Leonard Cohen", "Reference lyric words",
+            "https://lrclib.net/api/get/1",
+        ),
+    )
+    monkeypatch.setattr(
+        app, "download_audio",
+        lambda *args: (_ for _ in ()).throw(RuntimeError("Unavailable format")),
+    )
+    monkeypatch.setattr(app, "embed", lambda _: np.array([1.0, 0.0]))
+    monkeypatch.setattr(
+        app, "transcribe",
+        lambda *args: (_ for _ in ()).throw(AssertionError("No ASR required")),
+    )
+
+    status, rows, _, view = app.add_known_song(
+        cat, "Hallelujah", "Uploader: Singer", "youtube",
+        fallback_youtube_url="https://www.youtube.com/watch?v=123",
+    )
+    assert cat.indexed_count == 1
+    assert cat.melody_count == 0
+    assert rows[0][3] == "Not analyzed"
+    assert rows[0][-1] == "Reference lyrics (LRCLIB)"
+    assert "Melody unavailable" in status
     assert "View source" in view
 
 
@@ -47,6 +94,9 @@ def test_audio_is_transcribed_when_lyrics_are_missing(monkeypatch):
         lambda url: YouTubeAudio("Title", "Uploader", "video.webm", b"sample audio"),
     )
     monkeypatch.setattr(app, "transcribe", lambda data, name: "Recognized example words")
+    monkeypatch.setattr(
+        app, "extract_chroma", lambda data: np.ones((12, 12), dtype=np.float32)
+    )
     monkeypatch.setattr(app, "embed", lambda text: np.array([1.0, 0.0]))
 
     status, rows, _, view = app.add_known_song(
