@@ -370,23 +370,49 @@ def compare_catalog_lyrics(catalog: SongIndex, top_pairs: int):
 
 
 def search_upload(audio_path: str | None, top_k: int, catalog: SongIndex):
+    """Compare a recording against available lyric and melody references."""
     if not audio_path:
-        raise gr.Error("Record a short fragment first.")
-    if not catalog.indexed_count:
-        raise gr.Error(
-            "No songs with matching lyrics are indexed. Add songs with identifiable "
-            "lyrics to the local catalog first."
-        )
+        raise gr.Error("Record a short sung or spoken fragment first.")
+    if not catalog.indexed_count and not catalog.melody_count:
+        raise gr.Error("Add songs with lyrics or uploaded audio to the catalog first.")
     path = Path(audio_path)
-    try:
-        transcript = transcribe(read_audio(str(path)), path.name)
-        query = embed(transcript)
-    except ValueError as exc:
-        raise gr.Error(
-            "Speech recognition could not extract words from this recording. "
-            "Try a clear, short sung phrase; humming recognition is not supported yet."
-        ) from exc
-    return format_results(catalog.search(query, int(top_k)))
+    data = read_audio(str(path))
+    lyric_rows = []
+    melody_rows = []
+    notes = []
+    if catalog.indexed_count:
+        try:
+            transcript = transcribe(data, path.name).strip()
+            if transcript:
+                query = embed(transcript)
+                lyric_rows = format_results(catalog.search(query, int(top_k)))
+            else:
+                notes.append("No recognizable words: lyric comparison skipped.")
+        except (ValueError, RuntimeError) as exc:
+            notes.append(
+                f"Lyric recognition unavailable ({type(exc).__name__}); "
+                "melody comparison can still run."
+            )
+    if catalog.melody_count:
+        try:
+            chroma = extract_chroma(data, max_seconds=35)
+            melody_rows = [
+                [
+                    i, song.title, song.artist, f"{score * 100:.1f}",
+                    f"{offset:.1f} s",
+                ]
+                for i, (song, score, offset, _shift) in enumerate(
+                    catalog.search_melody(chroma, top_k=int(top_k)), start=1
+                )
+            ]
+        except MelodyError:
+            notes.append("No usable melody was extracted from the recording.")
+    if not lyric_rows and not melody_rows:
+        raise gr.Error("Neither recognizable words nor a comparable melody were found.")
+    if not catalog.melody_count:
+        notes.append("No catalog audio was available for melody comparison.")
+    notes.append("Melody alignment is experimental, not song-identification confidence.")
+    return lyric_rows, melody_rows, " ".join(notes)
 
 
 def render_video_cards(videos: list[dict[str, str]]) -> str:
@@ -623,10 +649,10 @@ with gr.Blocks(
                         lines=3,
                         interactive=False,
                     )
-                    gr.Markdown("#### Compare recognized words with catalog lyrics")
+                    gr.Markdown("#### Compare recording with your catalog")
                     top_k = gr.Slider(1, 10, value=5, step=1, label="Local top results")
                     search_file_button = gr.Button(
-                        "Compare recording with catalog lyrics", elem_classes=["scs-secondary"]
+                        "Compare recording with catalog (lyrics + melody)", elem_classes=["scs-secondary"]
                     )
                     results_table = gr.Dataframe(
                         headers=["Rank", "Title", "Performer / uploader", "Similarity", "Source"],
@@ -634,10 +660,23 @@ with gr.Blocks(
                         interactive=False,
                         label="Closest lyric matches in local catalog",
                     )
+                    melody_results_table = gr.Dataframe(
+                        headers=[
+                            "Rank", "Song", "Performer / uploader",
+                            "Melody alignment × 100", "Matched time",
+                        ],
+                        datatype=["number", "str", "str", "str", "str"],
+                        interactive=False,
+                        label="Experimental melody matches (available catalog audio)",
+                    )
+                    recording_comparison_note = gr.Markdown()
                     search_file_button.click(
                         search_upload,
                         inputs=[query_file, top_k, catalog_state],
-                        outputs=results_table,
+                        outputs=[
+                            results_table, melody_results_table,
+                            recording_comparison_note,
+                        ],
                         show_progress="minimal",
                     )
                     gr.Markdown("#### YouTube candidates from recognized words")
