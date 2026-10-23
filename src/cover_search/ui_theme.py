@@ -70,6 +70,33 @@ APP_CSS = """
     color: #f5f5ff;
 }
 
+.gradio-container [role="tablist"] {
+    gap: 6px;
+    border-bottom: 1px solid #e3e7f1;
+    margin-bottom: 18px;
+}
+.gradio-container button[role="tab"] {
+    color: #5f6b82;
+    font-weight: 650;
+    border-radius: 9px 9px 0 0;
+    padding: 12px 17px;
+}
+.gradio-container button[role="tab"][aria-selected="true"] {
+    color: #5044c0;
+    border-bottom-color: #6254da;
+}
+.gradio-container .scs-panel,
+.gradio-container .scs-match,
+.gradio-container .scs-video {
+    color: var(--scs-ink);
+}
+.gradio-container input:focus-visible,
+.gradio-container button:focus-visible,
+.gradio-container a:focus-visible {
+    outline: 2px solid #8178e4;
+    outline-offset: 2px;
+}
+
 .gradio-container button.scs-primary {
     background: #6154d9 !important;
     border-color: #6154d9 !important;
