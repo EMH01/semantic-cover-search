@@ -304,14 +304,12 @@ def compare_catalog_lyrics(catalog: SongIndex, top_pairs: int):
             render_lyric_comparison_cards([]),
         )
     displayed = pairs[:max(1, min(int(top_pairs), 50))]
+    excluded_label = "song" if excluded == 1 else "songs"
     note = (
-        f"**Compared all {len(pairs)} unique song pairs** among {eligible} songs with "
-        f"lyrics/transcriptions. Showing the top {len(displayed)} pairs. "
-        f"**{excluded} metadata-only songs excluded.** Sorted by shared word "
-        "sequences, then embedding cosine. Overlap uses three-word sequences "
-        "(Jaccard); cosine measures text-embedding similarity, not probability "
-        "of being a cover. Reference lyrics may be identical across versions "
-        "even when their actual performances differ."
+        f"**{len(pairs)} pairs compared** · {eligible} songs with lyrics · "
+        f"{excluded} metadata-only {excluded_label} excluded. "
+        f"Showing {len(displayed)} highest-ranked pairs, prioritizing shared phrases. "
+        "Scores are text similarities, not confirmed cover relationships."
     )
     return note, render_lyric_comparison_cards(displayed)
 
