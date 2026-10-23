@@ -251,7 +251,7 @@ def format_results(results):
 def render_lyric_comparison_cards(comparisons) -> str:
     """Compact comparison cards; lexical and semantic metrics stay distinct."""
     if not comparisons:
-        return '<div class="scs-empty">Add two songs with lyrics to see comparisons.</div>'
+        return '<div class="scs-empty">No song pairs to compare. Add two songs with lyrics first.</div>'
     cards = []
     for rank, pair in enumerate(comparisons, start=1):
         left, right = escape(pair.first.label), escape(pair.second.label)
@@ -261,7 +261,7 @@ def render_lyric_comparison_cards(comparisons) -> str:
         first_source = "LRCLIB" if pair.first.text_origin == "lrclib" else "ASR"
         second_source = "LRCLIB" if pair.second.text_origin == "lrclib" else "ASR"
         note = (
-            "Identical reference text does not prove identical performances."
+            "Identical indexed text is not proof of identical performances."
             if pair.exact_text else
             "Scores describe indexed text, not verified cover identity."
         )
@@ -269,10 +269,10 @@ def render_lyric_comparison_cards(comparisons) -> str:
             '<article class="scs-match">'
             f'<div class="scs-match-head">Comparison {rank:02d}</div>'
             f'<div class="scs-track-name">{left}</div>'
-            f'<div class="scs-track-source">Source: {first_source}</div>'
+            f'<div class="scs-track-source">Text: {first_source}</div>'
             '<div class="scs-match-divider"></div>'
             f'<div class="scs-track-name">{right}</div>'
-            f'<div class="scs-track-source">Source: {second_source}</div>'
+            f'<div class="scs-track-source">Text: {second_source}</div>'
             '<div class="scs-metrics">'
             '<div class="scs-metric">'
             '<div class="scs-metric-label">Shared lyric phrases</div>'
@@ -483,12 +483,14 @@ with gr.Blocks(
 
     with gr.Tab("Discover covers on YouTube"):
         gr.Markdown(
-            "Find cover video candidates on YouTube by song title. "
+            Find cover video candidates on YouTube by song title. "
             "Channels identify uploaders; verify the performers by opening each video. "
             "No personal catalog or API key required."
         )
         public_title = gr.Textbox(label="Song title", placeholder="e.g. Hallelujah")
-        public_search = gr.Button("Search covers on YouTube", variant="primary")
+        public_search = gr.Button(
+            "Search covers on YouTube", variant="primary", elem_classes=["scs-primary"]
+        )
         with gr.Accordion("Search by singing or recording (experimental)", open=False):
             gr.Markdown(
                 "Record or upload a short phrase. Parakeet will recognize **words**, "
@@ -500,7 +502,9 @@ with gr.Blocks(
                 sources=["microphone", "upload"],
                 label="Sing, speak or upload a short fragment",
             )
-            record_search_button = gr.Button("Find YouTube candidates from recording")
+            record_search_button = gr.Button(
+                "Find YouTube candidates from recording", elem_classes=["scs-secondary"]
+            )
             recording_text = gr.Textbox(
                 label="Words recognized from your recording (may be inaccurate)",
                 lines=3,
@@ -510,7 +514,9 @@ with gr.Blocks(
                 "**Optional:** compare the same recording with songs in Local catalog."
             )
             top_k = gr.Slider(1, 10, value=5, step=1, label="Local top results")
-            search_file_button = gr.Button("Compare with Local catalog lyrics")
+            search_file_button = gr.Button(
+                "Compare with Local catalog lyrics", elem_classes=["scs-secondary"]
+            )
             results_table = gr.Dataframe(
                 headers=["Rank", "Title", "Performer / uploader", "Similarity", "Source"],
                 datatype=["number", "str", "str", "str", "str"],
@@ -524,7 +530,10 @@ with gr.Blocks(
                 show_progress="minimal",
             )
         public_status = gr.Markdown()
-        public_results = gr.HTML(label="YouTube results")
+        public_results = gr.HTML(
+            value='<div class="scs-empty">Search for a song to explore recordings.</div>',
+            label="YouTube results",
+        )
         result_selection = gr.Dropdown(
             label="Choose a video to add to your local catalog",
             choices=[],
@@ -532,7 +541,8 @@ with gr.Blocks(
             visible=False,
         )
         add_selected_button = gr.Button(
-            "Add selected video to local catalog", visible=False
+            "Add selected video to local catalog", visible=False,
+            elem_classes=["scs-secondary"]
         )
         selected_status = gr.Markdown()
         public_search.click(
@@ -563,13 +573,13 @@ with gr.Blocks(
 
     with gr.Tab("Local catalog"):
         gr.Markdown(
-            "Session-only catalog: first look for reference lyrics online. "
-            "If unavailable, try audio transcription (which may require a "
-            "bounded YouTube download). Data resets when Gradio restarts."
+            "Collect recordings and compare their words. We try reference lyrics "
+            "first, then local transcription if needed. The catalog resets on restart.",
+            elem_classes=["scs-intro"],
         )
         with gr.Row():
-            with gr.Column():
-                gr.Markdown("### Upload a song")
+            with gr.Column(elem_classes=["scs-panel"]):
+                gr.Markdown("### Upload a song", elem_classes=["scs-section-title"])
                 add_file = gr.Audio(
                     type="filepath", sources=["upload"], label="Audio file to add"
                 )
@@ -580,11 +590,17 @@ with gr.Blocks(
                     inputs=add_file,
                     outputs=[add_title, add_artist],
                 )
-                add_file_button = gr.Button("Add song to catalog", variant="primary")
-            with gr.Column():
-                gr.Markdown("### Add a song from YouTube")
+                add_file_button = gr.Button(
+                    "Add song to catalog", variant="primary", elem_classes=["scs-primary"]
+                )
+            with gr.Column(elem_classes=["scs-panel"]):
+                gr.Markdown(
+                    "### Add a song from YouTube", elem_classes=["scs-section-title"]
+                )
                 add_url = gr.Textbox(label="YouTube URL")
-                add_url_button = gr.Button("Add link to catalog")
+                add_url_button = gr.Button(
+                    "Add link to catalog", elem_classes=["scs-secondary"]
+                )
 
         add_status = gr.Markdown()
         with gr.Accordion("Lyrics or automatic transcription · latest song", open=False):
@@ -594,17 +610,22 @@ with gr.Blocks(
             datatype=["str", "str", "str", "str"],
             interactive=False,
             label="Session catalog",
+            elem_classes=["scs-dataframe"],
         )
-        gr.Markdown("### Find songs with similar lyrics")
         gr.Markdown(
-            "Compare **all songs in your local catalog** that have lyrics or an "
-            "automatic transcription. This uses cached text embeddings and shared "
-            "word sequences; it does not download audio or recognize melodies."
+            "### Find songs with similar lyrics", elem_classes=["scs-section-title"]
+        )
+        gr.Markdown(
+            "Compare every available song pair using shared lyric phrases and "
+            "cached semantic embeddings. No further audio processing is needed.",
+            elem_classes=["scs-intro"],
         )
         comparison_top = gr.Slider(
             minimum=1, maximum=50, value=10, step=1, label="Show top song pairs"
         )
-        compare_button = gr.Button("Compare all catalog lyrics", variant="primary")
+        compare_button = gr.Button(
+            "Compare all catalog lyrics", variant="primary", elem_classes=["scs-primary"]
+        )
         comparison_status = gr.Markdown()
         comparison_results = gr.HTML(
             value='<p style="opacity:.75;">Add at least two songs, then compare.</p>',
