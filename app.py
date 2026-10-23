@@ -555,58 +555,56 @@ with gr.Blocks(
                 add_url_button = gr.Button(
                     "Add link to catalog", elem_classes=["scs-secondary"]
                 )
-        with gr.Accordion("Search by singing or humming · experimental", open=False):
-            gr.Markdown(
-                "Record a short phrase to search YouTube by recognized words, "
-                "or compare its musical pattern with analyzed catalog recordings. "
-                "YouTube searches are lyric-based; melody matching is local only."
-            )
-            query_file = gr.Audio(
-                type="filepath",
-                sources=["microphone"],
-                label="Record a sung or spoken fragment",
-            )
-            record_search_button = gr.Button(
-                "Search YouTube using recognized words", elem_classes=["scs-secondary"]
-            )
-            recording_text = gr.Textbox(
-                label="Words recognized from your recording (may be inaccurate)",
-                lines=3,
-                interactive=False,
-            )
-            gr.Markdown("#### Compare against your catalog")
-            top_k = gr.Slider(1, 10, value=5, step=1, label="Local top results")
-            search_file_button = gr.Button(
-                "Compare recording with catalog lyrics", elem_classes=["scs-secondary"]
-            )
-            results_table = gr.Dataframe(
-                headers=["Rank", "Title", "Performer / uploader", "Similarity", "Source"],
-                datatype=["number", "str", "str", "str", "str"],
-                interactive=False,
-                label="Closest lyric matches in local catalog",
-            )
-            search_file_button.click(
-                search_upload,
-                inputs=[query_file, top_k, catalog_state],
-                outputs=results_table,
-                show_progress="minimal",
-            )
-            gr.Markdown("#### YouTube candidates from recognized words")
-            recording_status = gr.Markdown()
-            recording_results = gr.HTML(
-                value='<div class="scs-empty">Record to search for candidates.</div>'
-            )
-            recording_selection = gr.Dropdown(
-                label="Choose a candidate to add",
-                choices=[], interactive=True, visible=False,
-            )
-            add_recording_button = gr.Button(
-                "Add selected recording candidate to catalog",
-                visible=False, elem_classes=["scs-secondary"],
-            )
-            recording_add_status = gr.Markdown(elem_classes=["scs-status"])
-
-
+                with gr.Accordion("Search by singing or humming · experimental", open=False):
+                    gr.Markdown(
+                        "Record a short phrase to search YouTube by recognized words, "
+                        "or compare its musical pattern with analyzed catalog recordings. "
+                        "YouTube searches are lyric-based; melody matching is local only."
+                    )
+                    query_file = gr.Audio(
+                        type="filepath",
+                        sources=["microphone"],
+                        label="Record a sung or spoken fragment",
+                    )
+                    record_search_button = gr.Button(
+                        "Search YouTube using recognized words", elem_classes=["scs-secondary"]
+                    )
+                    recording_text = gr.Textbox(
+                        label="Words recognized from your recording (may be inaccurate)",
+                        lines=3,
+                        interactive=False,
+                    )
+                    gr.Markdown("#### Compare against your catalog")
+                    top_k = gr.Slider(1, 10, value=5, step=1, label="Local top results")
+                    search_file_button = gr.Button(
+                        "Compare recording with catalog lyrics", elem_classes=["scs-secondary"]
+                    )
+                    results_table = gr.Dataframe(
+                        headers=["Rank", "Title", "Performer / uploader", "Similarity", "Source"],
+                        datatype=["number", "str", "str", "str", "str"],
+                        interactive=False,
+                        label="Closest lyric matches in local catalog",
+                    )
+                    search_file_button.click(
+                        search_upload,
+                        inputs=[query_file, top_k, catalog_state],
+                        outputs=results_table,
+                        show_progress="minimal",
+                    )
+                    gr.Markdown("#### YouTube candidates from recognized words")
+                    recording_status = gr.Markdown()
+                    recording_results = gr.HTML(
+                        value='<div class="scs-empty">Record to search for candidates.</div>'
+                    )
+                    recording_selection = gr.Dropdown(
+                        label="Choose a candidate to add",
+                        choices=[], interactive=True, visible=False,
+                    )
+                    add_recording_button = gr.Button(
+                        "Add selected recording candidate to catalog",
+                        visible=False, elem_classes=["scs-secondary"],
+                    )
+                    recording_add_status = gr.Markdown(elem_classes=["scs-status"])
         add_status = gr.Markdown(elem_classes=["scs-status"])
         with gr.Accordion("Lyrics or automatic transcription · latest song", open=False):
             lyrics_view = gr.HTML(value=render_transcription(None))
