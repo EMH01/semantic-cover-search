@@ -19,8 +19,8 @@ from cover_search.lyrics import (
     render_transcription,
     title_from_video,
 )
-from cover_search.metadata import audio_metadata
 from cover_search.melody import MAX_QUERY_SECONDS, MelodyError, extract_chroma
+from cover_search.metadata import audio_metadata
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
 from cover_search.services import embed_text, transcribe_audio
