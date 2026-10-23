@@ -502,8 +502,8 @@ with gr.Blocks(
             )
             query_file = gr.Audio(
                 type="filepath",
-                sources=["microphone", "upload"],
-                label="Sing, speak or upload a short fragment",
+                sources=["microphone"],
+                label="Record a sung or spoken fragment",
             )
             record_search_button = gr.Button(
                 "Find YouTube candidates from recording", elem_classes=["scs-secondary"]
