@@ -304,11 +304,14 @@ def render_lyric_comparison_cards(comparisons) -> str:
                 display += "%"
             fraction = 0 if value is None else max(0.0, min(100.0, value * 100))
             explanation = (
-                "N/A: the catalog does not have both audio references"
+                "N/A: audio was not available for both songs"
                 if value is None and "Melody" in label else
-                "Not enough indexed text to compare this pair"
+                "Not enough indexed lyrics to compare this pair"
                 if value is None else
-                "Exploratory text/audio similarity, not identification confidence"
+                "Cosine similarity between normalized lyric embeddings, "
+                "multiplied by 100. Not a probability."
+                if "Semantic" in label else
+                "Experimental similarity, not song identification confidence."
             )
             metric_html.append(
                 '<div class="scs-metric">'
