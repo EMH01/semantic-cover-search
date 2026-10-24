@@ -282,13 +282,6 @@ def add_youtube(
     )
 
 
-def format_results(results):
-    return [
-        [rank, song.title, song.artist, f"{score * 100:.1f}%", song.source]
-        for rank, (song, score) in enumerate(results, start=1)
-    ]
-
-
 def render_lyric_comparison_cards(comparisons) -> str:
     """Three independent metrics; missing audio/text is never scored as zero."""
     if not comparisons:
@@ -388,52 +381,6 @@ def compare_catalog_lyrics(catalog: SongIndex, top_pairs: int):
     return note, render_lyric_comparison_cards(displayed)
 
 
-def search_upload(audio_path: str | None, top_k: int, catalog: SongIndex):
-    """Compare a recording against available lyric and melody references."""
-    if not audio_path:
-        raise gr.Error("Record a short sung or spoken fragment first.")
-    if not catalog.indexed_count and not catalog.melody_count:
-        raise gr.Error("Add songs with lyrics or uploaded audio to the catalog first.")
-    path = Path(audio_path)
-    data = read_audio(str(path))
-    lyric_rows = []
-    melody_rows = []
-    notes = []
-    if catalog.indexed_count:
-        try:
-            transcript = transcribe(data, path.name).strip()
-            if transcript:
-                query = embed(transcript)
-                lyric_rows = format_results(catalog.search(query, int(top_k)))
-            else:
-                notes.append("No recognizable words: lyric comparison skipped.")
-        except (ValueError, RuntimeError) as exc:
-            notes.append(
-                f"Lyric recognition unavailable ({type(exc).__name__}); "
-                "melody comparison can still run."
-            )
-    if catalog.melody_count:
-        try:
-            chroma = extract_chroma(data, max_seconds=35)
-            melody_rows = [
-                [
-                    i, song.title, song.artist, f"{score * 100:.1f}",
-                    f"{offset:.1f} s",
-                ]
-                for i, (song, score, offset, _shift) in enumerate(
-                    catalog.search_melody(chroma, top_k=int(top_k)), start=1
-                )
-            ]
-        except MelodyError:
-            notes.append("No usable melody was extracted from the recording.")
-    if not lyric_rows and not melody_rows:
-        raise gr.Error("Neither recognizable words nor a comparable melody were found.")
-    if not catalog.melody_count:
-        notes.append("No catalog audio was available for melody comparison.")
-    notes.append("Melody alignment is experimental, not song-identification confidence.")
-    return lyric_rows, melody_rows, " ".join(notes)
-
-
 def render_video_cards(videos: list[dict[str, str]]) -> str:
     """Compact responsive video cards with escaped metadata and thumbnails."""
     if not videos:
@@ -502,15 +449,15 @@ def search_recording_on_youtube(
     This does not identify the recording from its melody or guarantee song ID.
     """
     if not audio_path:
-        raise gr.Error("Record or upload a short sung or spoken fragment first.")
+        raise gr.Error("Record a short sung or spoken phrase first.")
     path = Path(audio_path)
     progress(0.12, desc="Recognizing sung or spoken words locally…")
     try:
         recognized = transcribe(read_audio(str(path)), path.name).strip()
     except (ValueError, RuntimeError) as exc:
         raise gr.Error(
-            "No recognizable words were extracted. Try a clearer phrase; "
-            "humming and melodic matching are not implemented."
+            "No recognizable words were extracted. Try singing a clear phrase; "
+            "YouTube search here uses words, not melody."
         ) from exc
     if not recognized:
         raise gr.Error("The recognizer returned no words to search for.")
@@ -539,6 +486,23 @@ def search_recording_on_youtube(
         gr.update(visible=bool(videos)),
         recognized,
     )
+
+
+def add_confirmed_recording_result(
+    selection: str | None,
+    videos: list[dict[str, str]],
+    catalog: SongIndex,
+    progress: gr.Progress = gr.Progress(),  # noqa: B008
+):
+    """Add a confirmed YouTube recording through the same URL flow as manual paste."""
+    if selection is None:
+        raise gr.Error("Choose and confirm a YouTube result first.")
+    try:
+        video = videos[int(selection)]
+        url = video["url"]
+    except (TypeError, ValueError, IndexError, KeyError) as exc:
+        raise gr.Error("Selection has expired. Search again.") from exc
+    return add_youtube(url, catalog, progress=progress)
 
 
 def add_selected_video(
@@ -649,68 +613,37 @@ with gr.Blocks(
                     "Add link to catalog", elem_classes=["scs-secondary"]
                 )
 
-                with gr.Accordion("Search by singing or humming · experimental", open=False):
+                with gr.Accordion("Find a song by singing · experimental", open=False):
                     gr.Markdown(
-                        "Record a phrase to find candidates on YouTube from recognized "
-                        "words, or compare it with the local catalog. Audio uploads "
-                        "also contribute an experimental melody similarity metric."
+                        "Sing a recognizable phrase. We search YouTube using the "
+                        "words detected, then you choose the correct video. "
+                        "Humming alone is not supported for YouTube discovery.",
+                        elem_classes=["scs-intro"],
                     )
                     query_file = gr.Audio(
                         type="filepath",
                         sources=["microphone"],
-                        label="Record a sung or spoken fragment",
+                        label="Record a sung phrase",
                     )
                     record_search_button = gr.Button(
-                        "Search YouTube using recognized words", elem_classes=["scs-secondary"]
+                        "Find song on YouTube", elem_classes=["scs-secondary"]
                     )
                     recording_text = gr.Textbox(
-                        label="Words recognized from your recording (may be inaccurate)",
-                        lines=3,
+                        label="Recognized words (may be inaccurate)",
+                        lines=2,
                         interactive=False,
                     )
-                    gr.Markdown("#### Compare recording with your catalog")
-                    top_k = gr.Slider(1, 10, value=5, step=1, label="Local top results")
-                    search_file_button = gr.Button(
-                        "Compare recording with catalog (lyrics + melody)",
-                        elem_classes=["scs-secondary"],
-                    )
-                    results_table = gr.Dataframe(
-                        headers=["Rank", "Title", "Performer / uploader", "Similarity", "Source"],
-                        datatype=["number", "str", "str", "str", "str"],
-                        interactive=False,
-                        label="Closest lyric matches in local catalog",
-                    )
-                    melody_results_table = gr.Dataframe(
-                        headers=[
-                            "Rank", "Song", "Performer / uploader",
-                            "Melody alignment × 100", "Matched time",
-                        ],
-                        datatype=["number", "str", "str", "str", "str"],
-                        interactive=False,
-                        label="Experimental melody matches (available catalog audio)",
-                    )
-                    recording_comparison_note = gr.Markdown()
-                    search_file_button.click(
-                        search_upload,
-                        inputs=[query_file, top_k, catalog_state],
-                        outputs=[
-                            results_table, melody_results_table,
-                            recording_comparison_note,
-                        ],
-                        show_progress="minimal",
-                    )
-                    gr.Markdown("#### YouTube candidates from recognized words")
                     recording_status = gr.Markdown()
                     recording_results = gr.HTML(
-                        value='<div class="scs-empty">Record to search for candidates.</div>'
+                        value='<div class="scs-empty">Record a phrase to find candidates.</div>'
                     )
                     recording_selection = gr.Dropdown(
-                        label="Choose a candidate to add",
+                        label="Confirm the correct YouTube video",
                         choices=[], interactive=True, visible=False,
                     )
                     add_recording_button = gr.Button(
-                        "Add selected recording candidate to catalog",
-                        visible=False, elem_classes=["scs-secondary"],
+                        "Confirm and add to catalog",
+                        visible=False, elem_classes=["scs-primary"],
                     )
                     recording_add_status = gr.Markdown(elem_classes=["scs-status"])
         add_status = gr.Markdown(elem_classes=["scs-status"])
@@ -759,7 +692,7 @@ with gr.Blocks(
             show_progress="minimal",
         )
         add_recording_button.click(
-            add_selected_video,
+            add_confirmed_recording_result,
             inputs=[recording_selection, recording_results_state, catalog_state],
             outputs=[recording_add_status, catalog_table, catalog_state, lyrics_view],
             show_progress="full",
