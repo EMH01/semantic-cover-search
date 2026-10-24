@@ -9,7 +9,7 @@ A local-first research prototype for discovering song covers on YouTube and comp
 - **Lyrics-first, ASR fallback:** retrieve title-matched reference lyrics through the LRCLIB no-key API. If none are available **or the provider fails**, transcribe the uploaded audio or a bounded download of the selected YouTube video with the configured speech recognizer (Parakeet TDT on CPU by default). Index recognized text with local embeddings in FAISS. If both routes fail, retain a metadata-only entry rather than indexing invented words. LRCLIB lyrics may represent a different rendition, and speech recognition of singing may be inaccurate.
 - **Metadata-only entries:** if neither reference lyrics nor the fallback transcription produces usable text (or embedding fails), retain the song in the catalog without a searchable vector. Status and catalog columns distinguish **reference lyrics**, **automatic transcription**, and **metadata only**.
 - **Compare catalog songs:** click **Compare all catalog lyrics** to evaluate each pair with measurable features. The cards display three separate metrics: shared lyric phrases (three-word Jaccard), semantic similarity (embedding cosine × 100), and optional **melody similarity (experimental chroma alignment)**. The third measure is available when both recordings have usable audio features, whether uploaded locally or retrieved from an accessible YouTube video. If audio cannot be accessed, the measure correctly shows N/A. Audio-only pairs can still be compared even without recognized lyrics. No API calls or audio downloads are needed at comparison time.
-- **Recording search (in Local catalog):** beneath the YouTube URL field, record a short phrase with the microphone. The **Search YouTube using recognized words** action transcribes with Parakeet and searches YouTube for unverified lyric-based candidates; it does *not* search the whole YouTube catalog by melody. The **Compare recording with catalog (lyrics + melody)** action compares with both available lyric embeddings and automatically analyzed uploaded audio references, without requiring ASR to succeed for a melody-only match.
+- **Song discovery by singing (in Local catalog):** beneath the YouTube URL field, record a short sung/spoken phrase with the microphone and select **Find song on YouTube**. Parakeet recognizes the words and searches YouTube for possible videos. Review the results, **confirm the right video**, then select **Confirm and add to catalog**. This calls exactly the same import pipeline as manually pasting that video URL: LRCLIB reference lyrics, ASR fallback, and automatic melody analysis where audio is accessible. Results are unverified candidates; this does not recognize humming or identify songs on YouTube by melody.
 - **Automatic melody analysis for uploads and YouTube:** when a song is added, the app attempts to extract normalized 12-bin chroma audio features (up to three minutes). Uploaded files are read locally; YouTube URLs trigger a single bounded download when available, even if LRCLIB already provided the lyrics. The *same* media bytes are reused for ASR only if lyrics are missing. If the download or audio analysis fails, the lyric entry remains available and the melody column shows **Not analyzed**. Up to 12 reference feature matrices remain in session memory; raw media is not retained in the catalog. The melody metric is experimental and not a song-identification probability.
 - **Session-only state:** no database and no persistence. Restarting Gradio clears the catalog; this is intentional for a small demo.
 
@@ -32,15 +32,11 @@ flowchart LR
     F --> Cmp[Compare all catalog lyric pairs]
     H[Uploaded file or accessible YouTube audio] --> MC[Automatic local chroma extraction]
     MC --> MI[In-session melody references]
-    Q[Recorded sung phrase] --> HC[Query chroma]
-    HC --> MS[Melody subsequence alignment]
     MI --> Pair[Third metric in catalog pair comparison]
-    MI --> MS
-    Q --> P[Local Parakeet ASR]
+    Q[Recorded sung phrase] --> P[Local Parakeet ASR]
     P --> YQ[YouTube lyric-phrase search]
-    P --> QE[Optional local query embedding]
-    QE --> F
-    F --> R[Closest lyric matches]
+    YQ --> Confirm[User confirms YouTube video]
+    Confirm --> O
 ```
 
 **Important:** Neither YouTube metadata nor LRCLIB verifies a cover relationship. Parakeet is intended for speech recognition and may fail on singing. Chroma matching is a lightweight **experimental** music-feature comparison: polyphonic backing instruments, room noise and different arrangements can overwhelm a hummed vocal line. It is not DTW, a learned music-identification model, or internet-wide recognition. Results must be confirmed by listening.
@@ -62,8 +58,9 @@ The app runs at `http://127.0.0.1:7860` by default. The Gradio interface uses a 
 1. In **Local catalog**, add two uploaded audio files or accessible YouTube recordings. Melody features are extracted automatically during addition, even when LRCLIB supplies lyrics.
 2. Verify that the catalog marks **Melody** as *Ready* for accessible analyzed audio. A YouTube URL may display *Not analyzed* if the audio cannot be obtained, is too long/large, or melody extraction fails. Reference lyrics can still be available in those cases.
 3. Click **Compare all catalog lyrics**. The same comparison cards now show **Shared lyric phrases**, **Semantic similarity** and **Melody similarity · experimental**. The last metric should show N/A for pairs missing audio features.
-4. Under the YouTube URL, expand the recording panel. Sing or hum 5–20 seconds, then use **Compare recording with catalog (lyrics + melody)**. You can obtain melody candidates even when speech recognition finds no words.
-5. Independently, use **Search YouTube using recognized words** to get lyric-based YouTube video candidates. This is not YouTube melody search. The session data resets when Gradio restarts.
+4. Under the YouTube URL, expand **Find a song by singing · experimental**. Sing a clear 5–20-second phrase and select **Find song on YouTube**. This searches from recognized words, not humming/melody.
+5. Listen to and confirm a YouTube candidate, then select **Confirm and add to catalog**. The confirmed video uses the *same* LRCLIB → ASR fallback → optional melody workflow as the manual YouTube URL input. No local comparison tables are shown in the recording panel.
+6. To compare songs, use **Compare all catalog lyrics** in Local catalog. Session data resets when Gradio restarts.
 
 This is an experimental spectral-chroma baseline, not robust musical identity recognition: vocal humming and mixed commercial tracks can yield misleading similarities. The app does not search unindexed songs on YouTube by audio. A future version could use predominant-melody extraction and a rights-cleared reference corpus.
 
