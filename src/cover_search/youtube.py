@@ -1,6 +1,10 @@
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib.parse import parse_qs, urlparse
+
+import httpx
 
 
 @dataclass(frozen=True, slots=True)
@@ -11,8 +15,26 @@ class YouTubeAudio:
     data: bytes
 
 
+def validate_youtube_url(url: str) -> str:
+    """Accept canonical video, shortened and YouTube Music links only."""
+    parsed = urlparse(url.strip())
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or parsed.username or parsed.password:
+        raise ValueError("Enter a valid HTTPS YouTube video URL.")
+    if host in {"www.youtube.com", "youtube.com", "m.youtube.com", "music.youtube.com"}:
+        if parsed.path != "/watch" or not parse_qs(parsed.query).get("v"):
+            raise ValueError("Enter a YouTube video URL containing a video ID.")
+    elif host == "youtu.be":
+        if not parsed.path.strip("/") or "/" in parsed.path.strip("/"):
+            raise ValueError("Enter a valid shortened YouTube video URL.")
+    else:
+        raise ValueError("Only YouTube and YouTube Music video URLs are supported.")
+    return url.strip()
+
+
 def download_audio(url: str) -> YouTubeAudio:
-    """Download the best available audio stream using the optional yt-dlp dependency."""
+    """Download a bounded audio source using yt-dlp."""
+    url = validate_youtube_url(url)
     try:
         import yt_dlp
     except ImportError as exc:
@@ -27,6 +49,11 @@ def download_audio(url: str) -> YouTubeAudio:
             "outtmpl": output_template,
             "quiet": True,
             "noplaylist": True,
+            "max_filesize": 20 * 1024 * 1024,
+            "match_filter": lambda info, *, incomplete=False: (
+                "Video exceeds the 10-minute duration limit."
+                if info.get("duration") and info["duration"] > 600 else None
+            ),
         }
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -38,9 +65,94 @@ def download_audio(url: str) -> YouTubeAudio:
             if not path.exists():
                 raise RuntimeError("yt-dlp completed but no audio file could be located.")
 
+            if path.stat().st_size > 20 * 1024 * 1024:
+                raise ValueError("Downloaded audio exceeds the 20 MB limit.")
             return YouTubeAudio(
                 title=info.get("title") or "Unknown title",
                 artist=info.get("artist") or info.get("uploader") or "Unknown artist",
                 filename=path.name,
                 data=path.read_bytes(),
             )
+
+
+def _youtube_search(query: str, count: int) -> list[dict[str, str]]:
+    """Get flat video metadata, never downloading audio during discovery."""
+    import yt_dlp
+
+    options = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": True,
+        "noplaylist": True,
+        "socket_timeout": 12,
+    }
+    with yt_dlp.YoutubeDL(options) as ydl:
+        result = ydl.extract_info(f"ytsearch{count}:{query}", download=False)
+    videos = []
+    tutorial_terms = ("how to", "tutorial", "lesson", "reaction", "karaoke", "instrumental")
+    for item in (result or {}).get("entries") or []:
+        if not item:
+            continue
+        video_id = item.get("id")
+        if not video_id or not isinstance(video_id, str):
+            continue
+        video_title = str(item.get("title") or "Untitled")
+        if any(term in video_title.casefold() for term in tutorial_terms):
+            continue
+        videos.append({
+            "title": video_title,
+            "channel": str(item.get("channel") or item.get("uploader") or "Unknown channel"),
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+        })
+    return videos
+
+
+def search_youtube_videos(title: str, limit: int = 12) -> list[dict[str, str]]:
+    """Search YouTube by known song title and 'cover' (unverified candidates)."""
+    title = " ".join(title.split())
+    if not 2 <= len(title) <= 100:
+        raise ValueError("Enter a song title between 2 and 100 characters.")
+    count = min(max(int(limit), 1), 20)
+    return _youtube_search(f"{title} cover", count)
+
+
+def search_youtube_lyrics_fragment(
+    transcript: str, limit: int = 12
+) -> list[dict[str, str]]:
+    """Search metadata for a recognized lyrical phrase, not melodic recognition.
+
+    A result is just a YouTube query candidate; it is not a confirmed song ID.
+    """
+    words = re.findall(r"[\w']+", transcript, flags=re.UNICODE)
+    if len(words) < 4:
+        raise ValueError(
+            "At least four recognizable words are needed for a lyrics-based search."
+        )
+    count = min(max(int(limit), 1), 20)
+    # Avoid overlong or arbitrary model output as a search query.
+    phrase = " ".join(words[:12])[:150].strip()
+    return _youtube_search(f'"{phrase}" lyrics', count)
+
+
+def video_metadata(url: str) -> dict[str, str]:
+    """Get public YouTube video title and uploader without downloading audio."""
+    validated = validate_youtube_url(url)
+    parsed = urlparse(validated)
+    if parsed.hostname == "youtu.be":
+        video_id = parsed.path.strip("/")
+    else:
+        video_id = parse_qs(parsed.query)["v"][0]
+    canonical = f"https://www.youtube.com/watch?v={video_id}"
+    with httpx.Client(timeout=12) as client:
+        response = client.get(
+            "https://www.youtube.com/oembed",
+            params={"url": canonical, "format": "json"},
+        )
+        response.raise_for_status()
+        data = response.json()
+    return {
+        "title": str(data.get("title") or "Untitled YouTube video"),
+        "channel": str(data.get("author_name") or "Unknown uploader"),
+        "url": canonical,
+    }
