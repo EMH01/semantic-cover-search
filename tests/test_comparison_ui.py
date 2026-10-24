@@ -44,13 +44,13 @@ def test_comparison_view_safely_escapes_user_supplied_names():
     assert "&lt;script&gt;" in html
 
 
-def test_comparison_view_requires_two_searchable_songs():
+def test_comparison_view_requires_two_comparable_songs():
     from app import compare_catalog_lyrics
 
     catalog = SongIndex()
     catalog.add(Song("Only metadata", "A", "", text_origin="none"))
     status, html = compare_catalog_lyrics(catalog, 10)
-    assert "Add at least two songs" in status
+    assert "Add at least two comparable songs" in status
     assert "No comparable song pairs" in html
 
 
