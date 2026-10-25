@@ -38,6 +38,8 @@ logger = logging.getLogger(__name__)
 settings = Settings()
 MAX_AUDIO_BYTES = 20 * 1024 * 1024
 SUPPORTED_AUDIO = {".mp3", ".m4a", ".wav", ".ogg", ".flac", ".webm", ".mp4"}
+# Shared serial queue protects the per-session catalog and CPU-heavy model work.
+CATALOG_QUEUE_ID = "catalog-and-audio-jobs"
 
 
 def read_audio(path: str) -> bytes:
@@ -691,6 +693,8 @@ with gr.Blocks(
             inputs=[catalog_state, comparison_top],
             outputs=[comparison_status, comparison_results],
             show_progress="minimal",
+            concurrency_id=CATALOG_QUEUE_ID,
+            concurrency_limit=1,
         )
         record_search_button.click(
             search_recording_on_youtube,
@@ -700,6 +704,8 @@ with gr.Blocks(
                 recording_selection, add_recording_button, recording_text,
             ],
             show_progress="minimal",
+            concurrency_id=CATALOG_QUEUE_ID,
+            concurrency_limit=1,
         )
         add_recording_button.click(
             add_confirmed_recording_result,
@@ -707,6 +713,8 @@ with gr.Blocks(
             outputs=[recording_add_status, catalog_table, catalog_state, lyrics_view],
             show_progress="full",
             show_progress_on=[recording_add_status],
+            concurrency_id=CATALOG_QUEUE_ID,
+            concurrency_limit=1,
         )
         # Use Gradio's single native progress indicator for each import.
         # Restrict its overlay to the status component: never cover the
@@ -717,6 +725,8 @@ with gr.Blocks(
             outputs=[selected_status, catalog_table, catalog_state, lyrics_view],
             show_progress="full",
             show_progress_on=[selected_status],
+            concurrency_id=CATALOG_QUEUE_ID,
+            concurrency_limit=1,
         )
         add_file_button.click(
             add_upload,
@@ -724,6 +734,8 @@ with gr.Blocks(
             outputs=[add_status, catalog_table, catalog_state, lyrics_view],
             show_progress="full",
             show_progress_on=[add_status],
+            concurrency_id=CATALOG_QUEUE_ID,
+            concurrency_limit=1,
         )
         add_url_button.click(
             add_youtube,
@@ -731,7 +743,14 @@ with gr.Blocks(
             outputs=[add_status, catalog_table, catalog_state, lyrics_view],
             show_progress="full",
             show_progress_on=[add_status],
+            concurrency_id=CATALOG_QUEUE_ID,
+            concurrency_limit=1,
         )
+
+
+# Explicit queue keeps different import buttons FIFO instead of allowing overlap.
+# No event declares cancels=; a new request must never cancel an active import.
+demo.queue(default_concurrency_limit=1)
 
 
 if __name__ == "__main__":
