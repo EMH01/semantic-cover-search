@@ -1,14 +1,3 @@
----
-title: Semantic Cover Search
-emoji: 🎵
-colorFrom: blue
-colorTo: purple
-sdk: gradio
-python_version: "3.12"
-app_file: app.py
-pinned: false
----
-
 # Semantic Cover Search
 
 **[Live demo on Hugging Face Spaces](https://huggingface.co/spaces/esthermariamh/semantic-cover-search)** · Gradio · ZeroGPU hosting
@@ -102,9 +91,3 @@ The automated tests mock external services; they do not establish real-time YouT
 - **External services:** LRCLIB and YouTube can rate-limit or block retrievals; inaccessible audio leaves tonal analysis unavailable. Reference lyrics may differ from a particular performance.
 - **Data handling:** audio is processed for transcription and/or chroma extraction, while song metadata, text vectors and pitch-class features are held in a temporary Gradio catalog. Gradio and download tools may create temporary files; the application does not promise secure deletion of all such files.
 - **Rights:** lyrics and recordings can be copyrighted independently of service APIs. Users should ensure they have appropriate rights and follow applicable provider/platform terms when uploading, retrieving or displaying content.
-
-## Potential enhancements
-
-- Evaluate original/cover/unrelated-song rankings on a rights-cleared labelled benchmark, reporting metrics such as Recall@K.
-- Improve segment-level lyric retrieval and compare against stronger melody or predominant-pitch approaches.
-- Investigate a rights-cleared reference collection for reproducible audio evaluation.
