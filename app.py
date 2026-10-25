@@ -106,16 +106,21 @@ def add_known_song(
     """Try reference lyrics first, then speech recognition for unavailable lyrics."""
     title = title.strip() or "Untitled recording"
     artist = artist.strip() or "Unknown performer"
-    if any(
-        song.title.casefold() == title.casefold()
-        and song.artist.casefold() == artist.casefold()
-        for song in catalog.songs
-    ):
+    existing = next(
+        (
+            song for song in catalog.songs
+            if song.title.casefold() == title.casefold()
+            and song.artist.casefold() == artist.casefold()
+        ),
+        None,
+    )
+    if existing is not None and existing in catalog.searchable_songs:
         return (
-            f"**Already in local catalog:** {escape(title)} — {escape(artist)}.",
+            f"**Already indexed:** {escape(existing.label)}. "
+            "This entry already has searchable lyrics.",
             catalog_rows(catalog),
             catalog,
-            render_transcription(None, "This song is already in the catalog."),
+            render_transcription(None, "This song already has indexed lyrics."),
         )
 
     if progress is not None:
@@ -181,7 +186,10 @@ def add_known_song(
 
     song = Song(title, artist, text, source=source, text_origin=origin)
     try:
-        catalog.add(song, embedding)
+        if existing is None:
+            catalog.add(song, embedding)
+        else:
+            song = catalog.retry_metadata(song, embedding)
     except ValueError as exc:
         raise gr.Error(str(exc)) from exc
 
@@ -197,12 +205,14 @@ def add_known_song(
         except (MelodyError, ValueError, OSError, RuntimeError, ImportError) as exc:
             melody_problem = type(exc).__name__
 
-    status = f"**Added to local catalog:** {escape(song.label)}."
+    action = "Retried in local catalog" if existing is not None else "Added to local catalog"
+    status = f"**{action}:** {escape(song.label)}."
     if catalog.has_melody(song):
         status += " Melody features available for comparisons."
     elif audio_error:
         status += (
-            f" Melody unavailable: audio could not be obtained ({escape(audio_error)})."
+            " Melody unavailable: YouTube audio could not be obtained. "
+            "Check the terminal for yt-dlp details and the JavaScript runtime."
         )
     elif melody_problem:
         status += " Melody extraction was unavailable; lyric analysis is unaffected."
@@ -224,9 +234,9 @@ def add_known_song(
         status += " No searchable text was obtained; saved as **metadata only**."
         if index_error:
             status += " Text was obtained, but vector indexing failed."
-        elif fallback_error:
+        elif fallback_error and not audio_error:
             status += (
-                " Audio download or speech recognition failed "
+                " Audio transcription failed "
                 f"({escape(fallback_error)})."
             )
         if match is not None:
@@ -235,7 +245,7 @@ def add_known_song(
             view = render_transcription(display_text or None)
 
     if lookup_error:
-        status += f" LRCLIB issue: {escape(lookup_error)}"
+        status += f" Lyrics service issue: {escape(lookup_error)}"
     if progress is not None:
         progress(1.0, desc="Catalog updated")
     return status, catalog_rows(catalog), catalog, view
