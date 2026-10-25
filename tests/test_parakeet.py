@@ -70,3 +70,15 @@ def test_settings_do_not_expose_transcription_backend_switch():
     settings = Settings()
     assert not hasattr(settings, "asr_engine")
     assert not hasattr(settings, "local_whisper_model")
+
+
+def test_app_transcribes_with_parakeet_even_with_legacy_asr_env(monkeypatch):
+    """An old ASR_ENGINE setting must never select Whisper."""
+    import app
+
+    monkeypatch.setenv("ASR_ENGINE", "whisper")
+    monkeypatch.setattr(
+        app, "transcribe_parakeet",
+        lambda audio_bytes, filename: "recognized by parakeet",
+    )
+    assert app.transcribe(b"recording", "song.mp3") == "recognized by parakeet"
