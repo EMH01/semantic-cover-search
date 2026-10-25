@@ -45,5 +45,7 @@ def test_parakeet_rejects_empty_transcript(monkeypatch):
 
     monkeypatch.setattr(parakeet, "decode_audio", lambda _: np.ones(4, dtype=np.float32))
     monkeypatch.setattr(parakeet, "_recognizer", lambda: FakeRecognizer())
-    with pytest.raises(ValueError, match="empty transcript"):
+    with pytest.raises(ValueError, match="empty transcript") as exc_info:
         parakeet.transcribe_parakeet(b"audio")
+    assert "ASR_ENGINE" not in str(exc_info.value)
+    assert "clearer spoken words" in str(exc_info.value)
