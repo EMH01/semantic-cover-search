@@ -1,4 +1,5 @@
 """Semantic Cover Search: online cover discovery and session-only lyric similarity."""
+import logging
 import os
 import re
 from html import escape
@@ -31,6 +32,8 @@ from cover_search.youtube import (
     search_youtube_videos,
     video_metadata,
 )
+
+logger = logging.getLogger(__name__)
 
 settings = Settings()
 MAX_AUDIO_BYTES = 20 * 1024 * 1024
@@ -132,6 +135,7 @@ def add_known_song(
         match = find_lyrics(requested_title, lyric_artist)
     except LyricsLookupError as exc:
         lookup_error = str(exc)
+        logger.warning("LRCLIB lookup failed", exc_info=True)
 
     text = match.text if match else ""
     origin = "lrclib" if text else "none"
@@ -153,7 +157,8 @@ def add_known_song(
                 audio = download_audio(fallback_youtube_url)
                 audio_bytes, audio_name = audio.data, audio.filename
         except Exception as exc:
-            # A blocked/unavailable video cannot prevent lyrics from being indexed.
+            # Surface the root cause in the terminal; preserve partial song data.
+            logger.warning("Audio acquisition failed", exc_info=True)
             audio_error = type(exc).__name__
 
     if not text and audio_bytes is not None:
