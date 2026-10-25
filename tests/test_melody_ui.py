@@ -154,78 +154,6 @@ def test_youtube_melody_failure_does_not_break_lyrics(monkeypatch):
     assert "Melody extraction was unavailable" in status
 
 
-def test_confirmed_recording_result_uses_same_url_ingestion_as_paste(monkeypatch):
-    import app
-
-    catalog = SongIndex()
-    seen = []
-    sentinel = ("saved", [], catalog, "<p>lyrics</p>")
-
-    def save_link(url, target, progress):
-        seen.append((url, target))
-        return sentinel
-
-    monkeypatch.setattr(app, "add_youtube", save_link)
-    candidates = [
-        {
-            "title": "Hallelujah - Lucy Thomas",
-            "channel": "Lucy Thomas Music",
-            "url": "https://www.youtube.com/watch?v=ABC123xyz12",
-        },
-    ]
-    result = app.add_confirmed_recording_result(
-        "0", candidates, catalog, progress=lambda *args, **kwargs: None
-    )
-    assert result is sentinel
-    assert seen == [(candidates[0]["url"], catalog)]
-
-
-def test_recording_search_does_not_index_without_confirmation(monkeypatch, tmp_path):
-    import app
-
-    audio = tmp_path / "fragment.wav"
-    audio.write_bytes(b"fake recording")
-    monkeypatch.setattr(app, "read_audio", lambda *_: b"fake recording")
-    monkeypatch.setattr(
-        app, "transcribe", lambda *args: "singing some recognizable lyrics"
-    )
-    monkeypatch.setattr(
-        app, "search_youtube_lyrics_fragment",
-        lambda words: [
-            {
-                "title": "Candidate recording",
-                "channel": "Artist",
-                "url": "https://www.youtube.com/watch?v=ABC123xyz12",
-            },
-        ],
-    )
-    monkeypatch.setattr(
-        app, "add_youtube",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("Confirmation required before adding to catalog")
-        ),
-    )
-    result = app.search_recording_on_youtube(
-        str(audio), progress=lambda *args, **kwargs: None
-    )
-    assert len(result[2]) == 1
-    assert result[-1] == "singing some recognizable lyrics"
-    assert "unverified" in result[0]
-
-
-def test_recording_add_without_confirmation_does_not_import():
-    import gradio as gr
-    import pytest
-
-    from app import add_confirmed_recording_result
-
-    with pytest.raises(gr.Error, match="Choose and confirm"):
-        add_confirmed_recording_result(
-            None, [], SongIndex(),
-            progress=lambda *args, **kwargs: None,
-        )
-
-
 def test_melody_is_third_metric_not_standalone_link_action():
     import app
 
@@ -234,11 +162,11 @@ def test_melody_is_third_metric_not_standalone_link_action():
     assert "Analyze this YouTube melody" not in source
     assert "Analyze this audio as a melody reference" not in source
     assert "Find matching melodies" not in source
-    assert "Find a song by singing · experimental" in source
-    assert "Confirm and add to catalog" in source
-    assert "Compare recording with catalog (lyrics + melody)" not in source
+    assert "Find a song by singing" not in source
+    assert "Confirm and add to catalog" not in source
+    assert "Compare recording with catalog" not in source
     assert "Local top results" not in source
-    assert 'sources=["microphone"]' in source
+    assert 'sources=["microphone"]' not in source
 
 
 def test_audio_melody_failure_does_not_break_lyric_index(tmp_path, monkeypatch):
@@ -266,3 +194,38 @@ def test_audio_melody_failure_does_not_break_lyric_index(tmp_path, monkeypatch):
     assert catalog.indexed_count == 1
     assert catalog.melody_count == 0
     assert rows[0][-1] == "Reference lyrics (LRCLIB)"
+
+
+def test_uploaded_sung_audio_keeps_tonal_features_when_asr_is_empty(
+    tmp_path, monkeypatch
+):
+    """Parakeet cannot guarantee song lyrics, but valid audio remains comparable."""
+    import app
+
+    song_file = tmp_path / "At First Sight.mp3"
+    song_file.write_bytes(b"valid audio placeholder")
+    monkeypatch.setattr(
+        app, "find_lyrics",
+        lambda *args: (_ for _ in ()).throw(
+            app.LyricsLookupError("LRCLIB returned HTTP 503")
+        ),
+    )
+    monkeypatch.setattr(app, "read_audio", lambda _: b"audio")
+    monkeypatch.setattr(app, "extract_chroma", lambda _: _notes())
+    monkeypatch.setattr(
+        app, "transcribe",
+        lambda *args: (_ for _ in ()).throw(
+            ValueError("Parakeet produced an empty transcript.")
+        ),
+    )
+    catalog = SongIndex()
+    status, rows, _catalog, _view = app.add_upload(
+        str(song_file), "At First Sight", "Example performer", catalog,
+        progress=lambda *args, **kwargs: None,
+    )
+    assert catalog.melody_count == 1
+    assert catalog.indexed_count == 0
+    assert rows[0][3] == "Ready"
+    assert rows[0][4] == "Metadata only"
+    assert "Parakeet produced an empty transcript" in status
+    assert "LRCLIB returned HTTP 503" in status
