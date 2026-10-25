@@ -28,7 +28,6 @@ from cover_search.services import embed_text
 from cover_search.ui_theme import APP_CSS, HERO_HTML
 from cover_search.youtube import (
     download_audio,
-    search_youtube_lyrics_fragment,
     search_youtube_videos,
     video_metadata,
 )
@@ -101,7 +100,7 @@ def add_known_song(
     fallback_youtube_url: str | None = None,
     progress: gr.Progress | None = None,
 ) -> tuple[str, list[list[str]], SongIndex, str]:
-    """Try reference lyrics first, then speech recognition for unavailable lyrics."""
+    """Try reference lyrics, then best-effort Parakeet on uploaded/downloaded songs."""
     title = title.strip() or "Untitled recording"
     artist = artist.strip() or "Unknown performer"
     existing = next(
@@ -165,7 +164,9 @@ def add_known_song(
                 raise ValueError("The recognizer did not detect any words.")
             origin = "asr"
         except Exception as exc:
-            fallback_error = type(exc).__name__
+            fallback_error = (
+                str(exc) if isinstance(exc, ValueError) else type(exc).__name__
+            )
             text = ""
     elif not text and audio_error:
         fallback_error = audio_error
@@ -231,7 +232,10 @@ def add_known_song(
         )
         view = render_transcription(text)
     else:
-        status += " No searchable text was obtained; saved as **metadata only**."
+        status += (
+            " No searchable lyrics were obtained; saved as **metadata only**. "
+            "The tonal analysis can still be available."
+        )
         if index_error:
             status += " Text was obtained, but vector indexing failed."
         elif fallback_error and not audio_error:
@@ -453,70 +457,6 @@ def search_public_versions(title: str):
     )
 
 
-def search_recording_on_youtube(
-    audio_path: str | None, progress: gr.Progress = gr.Progress()  # noqa: B008
-):
-    """Transcribe a recording and search YouTube for lyric-text candidates.
-
-    This does not identify the recording from its melody or guarantee song ID.
-    """
-    if not audio_path:
-        raise gr.Error("Record a short sung or spoken phrase first.")
-    path = Path(audio_path)
-    progress(0.12, desc="Recognizing sung or spoken words locally…")
-    try:
-        recognized = transcribe(read_audio(str(path)), path.name).strip()
-    except (ValueError, RuntimeError) as exc:
-        raise gr.Error(
-            "No recognizable words were extracted. Try singing a clear phrase; "
-            "YouTube search here uses words, not melody."
-        ) from exc
-    if not recognized:
-        raise gr.Error("The recognizer returned no words to search for.")
-    progress(0.7, desc="Searching YouTube with the recognized lyric phrase…")
-    try:
-        videos = search_youtube_lyrics_fragment(recognized)
-    except ValueError as exc:
-        raise gr.Error(str(exc)) from exc
-    except Exception as exc:
-        raise gr.Error("YouTube phrase search is unavailable. Try again later.") from exc
-    note = (
-        f"**{len(videos)} possible YouTube results** from the recognized words. "
-        "These are **unverified song candidates**, not audio/melody matches. "
-        "Check video titles and listen to confirm the song before adding it."
-    )
-    options = [
-        (f"{i + 1}. {item['title']} — {item['channel']}", str(i))
-        for i, item in enumerate(videos)
-    ]
-    progress(1.0, desc="Candidate search finished")
-    return (
-        note,
-        render_video_cards(videos),
-        videos,
-        gr.update(choices=options, value=None, visible=bool(videos)),
-        gr.update(visible=bool(videos)),
-        recognized,
-    )
-
-
-def add_confirmed_recording_result(
-    selection: str | None,
-    videos: list[dict[str, str]],
-    catalog: SongIndex,
-    progress: gr.Progress = gr.Progress(),  # noqa: B008
-):
-    """Add a confirmed YouTube recording through the same URL flow as manual paste."""
-    if selection is None:
-        raise gr.Error("Choose and confirm a YouTube result first.")
-    try:
-        video = videos[int(selection)]
-        url = video["url"]
-    except (TypeError, ValueError, IndexError, KeyError) as exc:
-        raise gr.Error("Selection has expired. Search again.") from exc
-    return add_youtube(url, catalog, progress=progress)
-
-
 def add_selected_video(
     selection: str | None, videos: list[dict], catalog: SongIndex,
     progress: gr.Progress = gr.Progress()  # noqa: B008,
@@ -550,7 +490,6 @@ with gr.Blocks(
 ) as demo:
     catalog_state = gr.State(value=SongIndex)
     youtube_results_state = gr.State(value=[])
-    recording_results_state = gr.State(value=[])
     gr.HTML(value=HERO_HTML)
 
     with gr.Tab("Discover covers on YouTube"):
@@ -625,39 +564,6 @@ with gr.Blocks(
                     "Add link to catalog", elem_classes=["scs-secondary"]
                 )
 
-                with gr.Accordion("Find a song by singing · experimental", open=False):
-                    gr.Markdown(
-                        "Sing a recognizable phrase. We search YouTube using the "
-                        "words detected, then you choose the correct video. "
-                        "Humming alone is not supported for YouTube discovery.",
-                        elem_classes=["scs-intro"],
-                    )
-                    query_file = gr.Audio(
-                        type="filepath",
-                        sources=["microphone"],
-                        label="Record a sung phrase",
-                    )
-                    record_search_button = gr.Button(
-                        "Find song on YouTube", elem_classes=["scs-secondary"]
-                    )
-                    recording_text = gr.Textbox(
-                        label="Recognized words (may be inaccurate)",
-                        lines=2,
-                        interactive=False,
-                    )
-                    recording_status = gr.Markdown()
-                    recording_results = gr.HTML(
-                        value='<div class="scs-empty">Record a phrase to find candidates.</div>'
-                    )
-                    recording_selection = gr.Dropdown(
-                        label="Confirm the correct YouTube video",
-                        choices=[], interactive=True, visible=False,
-                    )
-                    add_recording_button = gr.Button(
-                        "Confirm and add to catalog",
-                        visible=False, elem_classes=["scs-primary"],
-                    )
-                    recording_add_status = gr.Markdown(elem_classes=["scs-status"])
         add_status = gr.Markdown(elem_classes=["scs-status"])
         with gr.Accordion("Lyrics or automatic transcription · latest song", open=False):
             lyrics_view = gr.HTML(value=render_transcription(None))
@@ -693,26 +599,6 @@ with gr.Blocks(
             inputs=[catalog_state, comparison_top],
             outputs=[comparison_status, comparison_results],
             show_progress="minimal",
-            concurrency_id=CATALOG_QUEUE_ID,
-            concurrency_limit=1,
-        )
-        record_search_button.click(
-            search_recording_on_youtube,
-            inputs=[query_file],
-            outputs=[
-                recording_status, recording_results, recording_results_state,
-                recording_selection, add_recording_button, recording_text,
-            ],
-            show_progress="minimal",
-            concurrency_id=CATALOG_QUEUE_ID,
-            concurrency_limit=1,
-        )
-        add_recording_button.click(
-            add_confirmed_recording_result,
-            inputs=[recording_selection, recording_results_state, catalog_state],
-            outputs=[recording_add_status, catalog_table, catalog_state, lyrics_view],
-            show_progress="full",
-            show_progress_on=[recording_add_status],
             concurrency_id=CATALOG_QUEUE_ID,
             concurrency_limit=1,
         )
