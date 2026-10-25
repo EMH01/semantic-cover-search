@@ -55,3 +55,51 @@ def test_metadata_only_entry_is_not_searched():
     assert len(index.songs) == 2
     assert index.indexed_count == 1
     assert [song.title for song, _ in index.search(np.array([1.0, 0.0]))] == ["Known"]
+
+
+
+def test_retry_metadata_upgrades_lyrics_without_duplicate_rows():
+    index = SongIndex()
+    old = Song("Angels Like You", "Miley Cyrus", "", text_origin="none")
+    index.add(old)
+    upgraded = Song(
+        "Angels Like You", "Miley Cyrus", "Reference lyrics",
+        source="youtube", text_origin="lrclib",
+    )
+    refreshed = index.retry_metadata(upgraded, np.array([1.0, 0.0]))
+    assert refreshed == upgraded
+    assert index.songs == (upgraded,)
+    assert index.indexed_count == 1
+    assert index.search(np.array([1.0, 0.0]))[0][0] == upgraded
+    with pytest.raises(ValueError, match="already has indexed lyrics"):
+        index.retry_metadata(upgraded, np.array([1.0, 0.0]))
+
+
+def test_retry_metadata_without_new_data_keeps_existing_melody():
+    index = SongIndex()
+    old = Song("Song", "Singer", "", source="upload", text_origin="none")
+    index.add(old)
+    chroma = np.ones((8, 12), dtype=np.float32)
+    index.index_melody(old, chroma)
+    reattempt = Song("Song", "Singer", "", source="upload", text_origin="none")
+    assert index.retry_metadata(reattempt) is old
+    assert index.songs == (old,)
+    assert index.melody_count == 1
+    upgraded = Song("Song", "Singer", "Recognized words", text_origin="asr")
+    result = index.retry_metadata(upgraded, np.array([0.0, 1.0]))
+    assert index.has_melody(result)
+    assert index.melody_count == 1
+    assert index.indexed_count == 1
+
+
+def test_retry_metadata_cannot_change_index_dimension():
+    index = SongIndex()
+    index.add(Song("Known", "A", "words"), np.array([1.0, 0.0]))
+    index.add(Song("Pending", "B", "", text_origin="none"))
+    with pytest.raises(ValueError, match="dimension"):
+        index.retry_metadata(
+            Song("Pending", "B", "new words", text_origin="asr"),
+            np.array([1.0, 0.0, 0.0]),
+        )
+    assert index.indexed_count == 1
+    assert len(index.songs) == 2
