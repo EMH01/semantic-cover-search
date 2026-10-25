@@ -524,15 +524,12 @@ with gr.Blocks(
     youtube_results_state = gr.State(value=[])
     gr.HTML(value=HERO_HTML)
     if ZERO_GPU:
-        with gr.Accordion("GPU semantic comparison · experimental", open=False):
-            gr.Markdown(
-                "Compare two lyrics excerpts using a multilingual embedding model "
-                "on a temporary ZeroGPU GPU. This is separate from the CPU song catalog."
-            )
-            with gr.Row():
-                semantic_left = gr.Textbox(label="First lyrics excerpt", lines=2)
-                semantic_right = gr.Textbox(label="Second lyrics excerpt", lines=2)
-            semantic_button = gr.Button("Compare meaning (GPU)")
+        # Keep a registered GPU event for ZeroGPU startup without showing
+        # the standalone experimental comparison in the public interface.
+        with gr.Group(visible=False):
+            semantic_left = gr.Textbox()
+            semantic_right = gr.Textbox()
+            semantic_button = gr.Button()
             semantic_result = gr.Markdown()
             semantic_button.click(
                 compare_gpu_phrases,
