@@ -49,6 +49,48 @@ class SongIndex:
             self._vectors.append(vector.reshape(-1).copy())
         self._songs.append(song)
 
+    def retry_metadata(self, updated: Song, embedding: np.ndarray | None = None) -> Song:
+        """Enrich an existing metadata-only entry without duplicating the song.
+
+        Preserve any melody matrix already attached to its original Song key.
+        Indexed lyrics are not silently replaced by weaker transcriptions.
+        """
+        identity = (updated.title.casefold(), updated.artist.casefold())
+        existing = next(
+            (
+                song for song in self._songs
+                if (song.title.casefold(), song.artist.casefold()) == identity
+            ),
+            None,
+        )
+        if existing is None:
+            raise ValueError("Cannot retry a song that is not in the catalog.")
+        if existing in self._indexed_songs:
+            raise ValueError("Existing song already has indexed lyrics.")
+
+        vector = None
+        if embedding is not None:
+            vector = self._prepare_vector(embedding)
+            if self._index is not None and self._index.d != vector.shape[1]:
+                raise ValueError("Embedding dimension does not match the existing index.")
+
+        if updated.text_origin == "none" and vector is None:
+            return existing
+
+        if vector is not None:
+            if self._index is None:
+                self._index = faiss.IndexFlatIP(vector.shape[1])
+            self._index.add(vector)
+
+        position = self._songs.index(existing)
+        self._songs[position] = updated
+        if vector is not None:
+            self._indexed_songs.append(updated)
+            self._vectors.append(vector.reshape(-1).copy())
+        if existing in self._melodies:
+            self._melodies[updated] = self._melodies.pop(existing)
+        return updated
+
     def search(self, embedding: np.ndarray, top_k: int = 5) -> list[tuple[Song, float]]:
         if self._index is None or not self._indexed_songs:
             return []
