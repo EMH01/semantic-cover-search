@@ -11,12 +11,7 @@ pinned: false
 
 # Semantic Cover Search
 
-> **ZeroGPU deployment note:** This branch adds a genuine CUDA-backed multilingual
-> semantic phrase comparison in Hugging Face ZeroGPU, while retaining existing
-> CPU routes for search, catalog, Parakeet ASR and melody processing. The CPU
-> catalog is not GPU-accelerated. The hosted demo remains experimental until
-> its end-to-end behavior is checked on the ZeroGPU deployment.
-
+**[Try the live Hugging Face Space](https://huggingface.co/spaces/esthermariamh/semantic-cover-search)** · Gradio · ZeroGPU
 
 A local-first research prototype for discovering song covers on YouTube and comparing songs through lyric and experimental audio similarity. **Melody comparison uses features automatically extracted from uploaded audio files and accessible YouTube recordings**; it cannot identify arbitrary unindexed songs across the internet.
 
@@ -54,6 +49,14 @@ flowchart LR
 ```
 
 **Important:** Neither YouTube metadata nor LRCLIB verifies a cover relationship. Parakeet is intended for speech recognition and may fail on singing. Chroma matching is a lightweight **experimental** music-feature comparison: polyphonic backing instruments, room noise and different arrangements can obscure the principal sung melody. It is not DTW, a learned music-identification model, or internet-wide recognition. Results must be confirmed by listening.
+
+## Public demo and deployment
+
+The [public Gradio demo](https://huggingface.co/spaces/esthermariamh/semantic-cover-search) is deployed on Hugging Face Spaces using ZeroGPU and synchronized from this repository through GitHub Actions. It offers YouTube cover discovery, a temporary song catalog and the project's lyric/audio comparison interface.
+
+The Space registers a ZeroGPU GPU callback for runtime compatibility; the current catalog, Parakeet ASR and chroma-processing paths remain CPU-based. The standalone experimental GPU phrase-comparison interface is hidden. GPU availability therefore does **not** imply GPU acceleration for the main audio pipeline.
+
+Catalog entries are session-scoped. YouTube downloads, lyric lookup and ASR are subject to third-party availability, resource limits and music-transcription accuracy; a live deployment does not guarantee every external-media operation will succeed. The full local application is preserved in the [`local-full` branch](https://github.com/EMH01/semantic-cover-search/tree/local-full).
 
 ## Installation
 
