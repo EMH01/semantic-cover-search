@@ -3,8 +3,8 @@
 import numpy as np
 
 from cover_search.index import SongIndex
-from cover_search.models import Song
 from cover_search.lyrics import LyricsLookupError, LyricsMatch
+from cover_search.models import Song
 from cover_search.youtube import YouTubeAudio
 
 
