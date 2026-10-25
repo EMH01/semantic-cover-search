@@ -67,7 +67,7 @@ def test_melody_metric_is_present_and_shows_na_for_links():
         np.array([1.0, 0.0]),
     )
     _status, html = compare_catalog_lyrics(catalog, 10)
-    assert "Melody similarity" in html
+    assert "Tonal pattern similarity" in html
     assert "N/A" in html
 
 
@@ -85,6 +85,6 @@ def test_audio_only_songs_can_be_compared_without_lyrics():
     catalog.index_melody(second, chroma)
     status, html = compare_catalog_lyrics(catalog, 10)
     assert "1 pair compared" in status
-    assert "Melody similarity" in html
+    assert "Tonal pattern similarity" in html
     assert html.count("N/A") >= 2
     assert "100.0" in html
