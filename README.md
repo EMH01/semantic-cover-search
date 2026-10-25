@@ -55,7 +55,7 @@ The app runs at `http://127.0.0.1:7860` by default. The Gradio interface uses a 
 
 ## Transcription model
 
-**NVIDIA Parakeet TDT 0.6B v3 is the only transcription backend.** It runs locally through sherpa-onnx without an API key. Whisper/Faster-Whisper, ASR_ENGINE switching, and hosted audio transcription are no longer included. Singing, humming and accompaniment can still make speech recognition inaccurate; LRCLIB lyrics remain the first choice.
+**NVIDIA Parakeet TDT 0.6B v3 is the only transcription backend.** It runs locally through sherpa-onnx without an API key. There is no alternate speech-recognition backend or runtime engine switch. Singing, humming and accompaniment can still make speech recognition inaccurate; LRCLIB lyrics remain the first choice.
 
 The Hugging Face progress lines `Download complete` / `Reconstruction complete: 0.00B` relate to downloading or retrieving model assets from cache; they are informational and not evidence of a failed transcription by themselves.
 
