@@ -1,4 +1,3 @@
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -115,24 +114,6 @@ def search_youtube_videos(title: str, limit: int = 12) -> list[dict[str, str]]:
         raise ValueError("Enter a song title between 2 and 100 characters.")
     count = min(max(int(limit), 1), 20)
     return _youtube_search(f"{title} cover", count)
-
-
-def search_youtube_lyrics_fragment(
-    transcript: str, limit: int = 12
-) -> list[dict[str, str]]:
-    """Search metadata for a recognized lyrical phrase, not melodic recognition.
-
-    A result is just a YouTube query candidate; it is not a confirmed song ID.
-    """
-    words = re.findall(r"[\w']+", transcript, flags=re.UNICODE)
-    if len(words) < 4:
-        raise ValueError(
-            "At least four recognizable words are needed for a lyrics-based search."
-        )
-    count = min(max(int(limit), 1), 20)
-    # Avoid overlong or arbitrary model output as a search query.
-    phrase = " ".join(words[:12])[:150].strip()
-    return _youtube_search(f'"{phrase}" lyrics', count)
 
 
 def video_metadata(url: str) -> dict[str, str]:
