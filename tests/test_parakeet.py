@@ -47,5 +47,26 @@ def test_parakeet_rejects_empty_transcript(monkeypatch):
     monkeypatch.setattr(parakeet, "_recognizer", lambda: FakeRecognizer())
     with pytest.raises(ValueError, match="empty transcript") as exc_info:
         parakeet.transcribe_parakeet(b"audio")
-    assert "ASR_ENGINE" not in str(exc_info.value)
     assert "clearer spoken words" in str(exc_info.value)
+
+
+def test_app_transcription_always_delegates_to_parakeet(monkeypatch):
+    import app
+
+    calls = []
+
+    def fake_parakeet(audio, filename):
+        calls.append((audio, filename))
+        return "recognized words"
+
+    monkeypatch.setattr(app, "transcribe_parakeet", fake_parakeet)
+    assert app.transcribe(b"audio", "song.wav") == "recognized words"
+    assert calls == [(b"audio", "song.wav")]
+
+
+def test_settings_do_not_expose_transcription_backend_switch():
+    from cover_search.config import Settings
+
+    settings = Settings()
+    assert not hasattr(settings, "asr_engine")
+    assert not hasattr(settings, "local_whisper_model")
