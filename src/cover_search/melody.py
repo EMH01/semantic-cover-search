@@ -106,13 +106,33 @@ def extract_chroma(data: bytes, max_seconds: int = MAX_REFERENCE_SECONDS) -> np.
     return pitch
 
 
+def _temporal_pattern(chroma: np.ndarray) -> np.ndarray:
+    """Remove stable tonal background before comparing changing pitch patterns.
+
+    Raw chroma is dominated by broadly distributed spectral energy: even two
+    unrelated tracks can have near-identical normalized vectors each frame.
+    Time-centering per pitch class rejects this non-discriminative baseline.
+    The resulting score measures changing tonal patterns, NOT isolated melody.
+    """
+    data = np.asarray(chroma, dtype=np.float32)
+    # Remove a static harmonic signature and any remaining per-frame common level.
+    pattern = data - data.mean(axis=0, keepdims=True)
+    pattern -= pattern.mean(axis=1, keepdims=True)
+    norms = np.linalg.norm(pattern, axis=1)
+    if np.count_nonzero(norms > 1e-5) < 7:
+        raise MelodyError("Not enough changing tonal information to compare.")
+    pattern /= np.maximum(norms[:, None], 1e-5)
+    return pattern
+
+
 def melody_match(
     query: np.ndarray, reference: np.ndarray
 ) -> tuple[float, float, int]:
-    """Find strongest subsequence chroma alignment with tempo/pitch tolerance.
+    """Match changing tonal patterns with tempo and pitch-shift tolerance.
 
-    Returns (alignment score 0..1, offset seconds, pitch-class shift).
-    The score is NOT a calibrated probability of identifying a song.
+    Returns an exploratory alignment score (0..1), approximate offset and
+    pitch-class shift. This does not extract an isolated vocal melody or
+    estimate a calibrated probability of song identity.
     """
     a = np.asarray(query, dtype=np.float32)
     b = np.asarray(reference, dtype=np.float32)
@@ -120,6 +140,10 @@ def melody_match(
         raise MelodyError("Expected pitch-class matrices with 12 columns.")
     if a.shape[0] < 7 or b.shape[0] < 7:
         raise MelodyError("Not enough pitch-class frames to compare.")
+    # Compare frame-to-frame tonal variation, not the nearly uniform average
+    # spectrum. Raw average chroma cosine can exceed 0.99 for unrelated songs.
+    a = _temporal_pattern(a)
+    b = _temporal_pattern(b)
     best_score, best_offset, best_shift = -1.0, 0.0, 0
     # Mild variations of performance speed, plus transposed singing.
     for tempo in (0.8, 1.0, 1.2):
@@ -143,7 +167,8 @@ def melody_match(
             sums = np.zeros(b.shape[0] - query_length + 1, dtype=np.float32)
             for note in range(12):
                 sums += np.correlate(b[:, note], candidate[:, note], mode="valid")
-            # Select the segment with highest average per voiced query frame.
+            # Signed centered correlation: unrelated patterns should stay near
+            # zero, rather than scoring ~1 because their spectra are flat.
             averages = sums / np.count_nonzero(valid)
             location = int(np.argmax(averages))
             if averages[location] > best_score:
