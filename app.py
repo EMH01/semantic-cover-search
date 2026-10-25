@@ -2,12 +2,16 @@
 import logging
 import os
 import re
+import sys
 from html import escape
 from inspect import signature
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import gradio as gr
+
+# Spaces installs requirements before copying the project package.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from cover_search.config import Settings
 from cover_search.index import SongIndex
