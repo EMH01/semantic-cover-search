@@ -220,3 +220,42 @@ def test_lyric_view_is_readable_and_escapes_provider_content():
     assert "max-height:450px" in markup
     assert "View source" in markup
     assert "Next verse" in markup
+
+
+def test_lrclib_retries_transient_connectivity_error_once(monkeypatch):
+    calls = []
+    request = httpx.Request("GET", "https://lrclib.net/api/search")
+    records = [{
+        "id": 17, "trackName": "Hallelujah",
+        "artistName": "Leonard Cohen", "plainLyrics": "Reference lyrics",
+    }]
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return records
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, *args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise httpx.ConnectError("Temporary connection", request=request)
+            return Response()
+
+    monkeypatch.setattr("cover_search.lyrics.httpx.Client", Client)
+    monkeypatch.setattr("cover_search.lyrics.time.sleep", lambda seconds: None)
+    match = find_lyrics("Hallelujah")
+    assert match is not None
+    assert match.text == "Reference lyrics"
+    assert len(calls) == 2
