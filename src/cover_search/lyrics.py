@@ -94,7 +94,12 @@ def _get_results(client: httpx.Client, params: dict[str, str]) -> list[dict]:
                 f"LRCLIB returned HTTP {code}; try again later."
             ) from exc
         except httpx.RequestError as exc:
-            raise LyricsLookupError("LRCLIB could not be reached.") from exc
+            if attempt == 0:
+                time.sleep(0.6)
+                continue
+            raise LyricsLookupError(
+                "LRCLIB could not be reached after a retry."
+            ) from exc
         except ValueError as exc:
             raise LyricsLookupError("LRCLIB returned invalid JSON.") from exc
     return []
