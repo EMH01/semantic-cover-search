@@ -131,7 +131,7 @@ def test_lrclib_service_error_still_tries_audio(monkeypatch):
     status, _, _, _ = app.add_known_song(
         cat, "Title", "Uploader: Singer", "youtube", fallback_youtube_url="https://x.test",
     )
-    assert "LRCLIB issue" in status
+    assert "Lyrics service issue" in status
     assert cat.songs[0].text_origin == "asr"
 
 
@@ -154,7 +154,7 @@ def test_empty_asr_keeps_metadata_without_crashing(monkeypatch):
     assert len(cat.songs) == 1
     assert cat.indexed_count == 0
     assert rows[0][-1] == "Metadata only"
-    assert "speech recognition failed" in status
+    assert "Audio transcription failed" in status
     assert "metadata-only" in view
 
 
