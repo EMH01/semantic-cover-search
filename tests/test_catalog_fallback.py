@@ -3,6 +3,7 @@
 import numpy as np
 
 from cover_search.index import SongIndex
+from cover_search.models import Song
 from cover_search.lyrics import LyricsLookupError, LyricsMatch
 from cover_search.youtube import YouTubeAudio
 
@@ -155,3 +156,37 @@ def test_empty_asr_keeps_metadata_without_crashing(monkeypatch):
     assert rows[0][-1] == "Metadata only"
     assert "speech recognition failed" in status
     assert "metadata-only" in view
+
+
+def test_retry_existing_metadata_only_song_after_services_recover(monkeypatch):
+    import app
+
+    cat = SongIndex()
+    cat.add(Song("Angels Like You", "Uploader: Miley Cyrus - Topic", "",
+                 source="youtube", text_origin="none"))
+    monkeypatch.setattr(
+        app, "find_lyrics",
+        lambda *args: LyricsMatch(
+            "Angels Like You", "Miley Cyrus", "Some reference lyrics",
+            "https://lrclib.net/api/get/15",
+        ),
+    )
+    monkeypatch.setattr(app, "embed", lambda _: np.array([1.0, 0.0]))
+    monkeypatch.setattr(
+        app, "download_audio",
+        lambda url: YouTubeAudio("Angels Like You", "Miley Cyrus", "song.webm", b"audio"),
+    )
+    monkeypatch.setattr(
+        app, "extract_chroma", lambda data: np.ones((10, 12), dtype=np.float32)
+    )
+    status, rows, _, _ = app.add_known_song(
+        cat, "Angels Like You", "Uploader: Miley Cyrus - Topic", "youtube",
+        lyric_title="Angels Like You",
+        fallback_youtube_url="https://www.youtube.com/watch?v=123",
+    )
+    assert "Retried in local catalog" in status
+    assert len(cat.songs) == 1
+    assert cat.indexed_count == 1
+    assert cat.melody_count == 1
+    assert rows[0][3] == "Ready"
+    assert rows[0][4] == "Reference lyrics (LRCLIB)"
