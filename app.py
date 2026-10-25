@@ -318,7 +318,7 @@ def render_lyric_comparison_cards(comparisons) -> str:
         metrics = [
             ("Shared lyric phrases", pair.phrase_overlap, "scs-meter-fill"),
             ("Semantic similarity ⓘ", pair.semantic_similarity, "scs-meter-fill-alt"),
-            ("Melody similarity · experimental", pair.melody_similarity, "scs-meter-fill"),
+            ("Tonal pattern similarity · experimental", pair.melody_similarity, "scs-meter-fill"),
         ]
         metric_html = []
         for label, value, color in metrics:
@@ -328,14 +328,15 @@ def render_lyric_comparison_cards(comparisons) -> str:
                 display += "%"
             fraction = 0 if value is None else max(0.0, min(100.0, value * 100))
             explanation = (
-                "N/A: audio was not available for both songs"
-                if value is None and "Melody" in label else
+                "N/A: audio unavailable or lacked distinctive tonal changes"
+                if value is None and "Tonal" in label else
                 "Not enough indexed lyrics to compare this pair"
                 if value is None else
                 "Cosine similarity between normalized lyric embeddings, "
                 "multiplied by 100. Not a probability."
                 if "Semantic" in label else
-                "Experimental similarity, not song identification confidence."
+                "Changing chroma patterns from the complete musical mix; "
+                "not an isolated vocal melody or identification confidence."
             )
             metric_html.append(
                 '<div class="scs-metric">'
@@ -390,8 +391,9 @@ def compare_catalog_lyrics(catalog: SongIndex, top_pairs: int):
         f"{catalog.melody_count} audio-analyzed · "
         f"{excluded} metadata-only {song_label} excluded. "
         "Sorted primarily by shared lyric phrases. "
-        "Melody similarity is N/A when either recording is unavailable; "
-        "scores are not probabilities of a cover match."
+        "Tonal pattern similarity reflects changes in the full audio mix, "
+        "not an isolated melody; N/A means missing or uninformative audio. "
+        "Scores are not probabilities of a cover match."
     )
     return note, render_lyric_comparison_cards(displayed)
 
