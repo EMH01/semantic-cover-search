@@ -8,12 +8,15 @@ from inspect import signature
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-import gradio as gr
-
-# Only ZeroGPU gets a CUDA-backed semantic demo. CPU-first catalog stays intact.
+# Patch CUDA before importing Gradio or other Torch consumers on ZeroGPU.
 ZERO_GPU = os.getenv("SPACES_ZERO_GPU") == "1"
 if ZERO_GPU:
     import spaces
+
+import gradio as gr
+
+# Only ZeroGPU gets a CUDA-backed semantic demo. CPU-first catalog stays intact.
+if ZERO_GPU:
     from sentence_transformers import SentenceTransformer
 
     _gpu_semantic_model = SentenceTransformer(
