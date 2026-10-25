@@ -8,7 +8,35 @@ from inspect import signature
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+# Patch CUDA before importing Gradio or other Torch consumers on ZeroGPU.
+ZERO_GPU = os.getenv("SPACES_ZERO_GPU") == "1"
+if ZERO_GPU:
+    import spaces
+
 import gradio as gr
+
+# Only ZeroGPU gets a CUDA-backed semantic demo. CPU-first catalog stays intact.
+if ZERO_GPU:
+    from sentence_transformers import SentenceTransformer
+
+    _gpu_semantic_model = SentenceTransformer(
+        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        device="cuda",
+    )
+
+    @spaces.GPU(duration=45)
+    def compare_gpu_phrases(left: str, right: str) -> str:
+        """Genuine CUDA-backed semantic comparison, independent of session state."""
+        if not left.strip() or not right.strip():
+            raise gr.Error("Enter two phrases to compare.")
+        vectors = _gpu_semantic_model.encode(
+            [left, right], convert_to_tensor=True, normalize_embeddings=True
+        )
+        score = float((vectors[0] @ vectors[1]).item())
+        return (
+            f"**Semantic cosine similarity: {score:.3f}** "
+            "(not a probability of matching cover songs)."
+        )
 
 # Spaces installs requirements before copying the project package.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
@@ -495,6 +523,23 @@ with gr.Blocks(
     catalog_state = gr.State(value=SongIndex)
     youtube_results_state = gr.State(value=[])
     gr.HTML(value=HERO_HTML)
+    if ZERO_GPU:
+        with gr.Accordion("GPU semantic comparison · experimental", open=False):
+            gr.Markdown(
+                "Compare two lyrics excerpts using a multilingual embedding model "
+                "on a temporary ZeroGPU GPU. This is separate from the CPU song catalog."
+            )
+            with gr.Row():
+                semantic_left = gr.Textbox(label="First lyrics excerpt", lines=2)
+                semantic_right = gr.Textbox(label="Second lyrics excerpt", lines=2)
+            semantic_button = gr.Button("Compare meaning (GPU)")
+            semantic_result = gr.Markdown()
+            semantic_button.click(
+                compare_gpu_phrases,
+                inputs=[semantic_left, semantic_right],
+                outputs=semantic_result,
+                concurrency_limit=1,
+            )
 
     with gr.Tab("Discover covers on YouTube"):
         gr.Markdown(

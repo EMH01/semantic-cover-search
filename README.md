@@ -4,12 +4,19 @@ emoji: 🎵
 colorFrom: blue
 colorTo: purple
 sdk: gradio
-python_version: "3.11"
+python_version: "3.12"
 app_file: app.py
 pinned: false
 ---
 
 # Semantic Cover Search
+
+> **ZeroGPU deployment note:** This branch adds a genuine CUDA-backed multilingual
+> semantic phrase comparison in Hugging Face ZeroGPU, while retaining existing
+> CPU routes for search, catalog, Parakeet ASR and melody processing. The CPU
+> catalog is not GPU-accelerated. The hosted demo remains experimental until
+> its end-to-end behavior is checked on the ZeroGPU deployment.
+
 
 A local-first research prototype for discovering song covers on YouTube and comparing songs through lyric and experimental audio similarity. **Melody comparison uses features automatically extracted from uploaded audio files and accessible YouTube recordings**; it cannot identify arbitrary unindexed songs across the internet.
 
