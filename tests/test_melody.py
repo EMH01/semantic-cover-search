@@ -98,6 +98,19 @@ def test_unrelated_flat_spectra_are_not_99_percent_melody_matches():
     assert 0 <= score < 0.35
 
 
+def test_same_notes_in_different_order_do_not_look_like_same_tune():
+    # Both pieces use exactly the same pitches with the same frequencies,
+    # yet their changing sequences are independent.
+    rng = np.random.default_rng(88)
+    material = np.tile(np.arange(12), 10)
+    first = _notes(rng.permutation(material))
+    second = _notes(
+        np.concatenate([rng.permutation(material), rng.permutation(material)])
+    )
+    score, _, _ = melody_match(first, second)
+    assert score < 0.35
+
+
 def test_same_sequence_remains_high_after_background_centering():
     notes = [0, 2, 4, 5, 7, 9, 7, 5, 4, 2, 0, 11]
     reference = _notes(notes * 9)
