@@ -1,2 +1,13 @@
-# Install this project and all standard runtime dependencies from pyproject.toml.
--e .
+# Hugging Face Spaces installs requirements before copying the full repository.
+# Keep runtime dependencies here; pyproject.toml remains the source for editable installs.
+faiss-cpu>=1.8
+sherpa-onnx>=1.12.0
+huggingface-hub>=0.21
+av>=11,<18
+sentence-transformers>=3.0
+gradio>=5.0
+httpx>=0.27
+numpy>=1.26
+python-dotenv>=1.0
+mutagen>=1.47
+yt-dlp[default]>=2025.11.12

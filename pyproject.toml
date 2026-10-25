@@ -39,3 +39,7 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.pytest.ini_options]
 # Avoid inaccessible global Windows TEMP folders when using tmp_path fixtures.
 addopts = "--basetemp=.pytest_tmp"
+
+# Space bootstraps src/ before package imports.
+[tool.ruff.lint.per-file-ignores]
+"app.py" = ["E402"]
