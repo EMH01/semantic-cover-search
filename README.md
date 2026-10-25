@@ -11,6 +11,7 @@ A local-first research prototype for discovering song covers on YouTube and comp
 - **Compare catalog songs:** click **Compare all catalog lyrics** to evaluate each pair with measurable features. The cards display three separate metrics: shared lyric phrases (three-word Jaccard), semantic similarity (embedding cosine × 100), and optional **tonal pattern similarity (experimental chroma alignment)**. The third measure is available when both recordings have usable audio features, whether uploaded locally or retrieved from an accessible YouTube video. If audio cannot be accessed, the measure correctly shows N/A. Audio-only pairs can still be compared even without recognized lyrics. No API calls or audio downloads are needed at comparison time.
 - **Song discovery by singing (in Local catalog):** beneath the YouTube URL field, record a short sung/spoken phrase with the microphone and select **Find song on YouTube**. Parakeet recognizes the words and searches YouTube for possible videos. Review the results, **confirm the right video**, then select **Confirm and add to catalog**. This calls exactly the same import pipeline as manually pasting that video URL: LRCLIB reference lyrics, ASR fallback, and automatic melody analysis where audio is accessible. Results are unverified candidates; this does not recognize humming or identify songs on YouTube by melody.
 - **Automatic melody analysis for uploads and YouTube:** when a song is added, the app attempts to extract normalized 12-bin chroma audio features (up to three minutes). Uploaded files are read locally; YouTube URLs trigger a single bounded download when available, even if LRCLIB already provided the lyrics. The *same* media bytes are reused for ASR only if lyrics are missing. If the download or audio analysis fails, the lyric entry remains available and the melody column shows **Not analyzed**. Up to 12 reference feature matrices remain in session memory; raw media is not retained in the catalog. The tonal pattern metric is experimental and not a song-identification probability or an isolated vocal-melody measurement.
+- **Shared catalog job queue:** file uploads, manually pasted YouTube links, confirmed search-result videos, microphone-confirmed songs, catalog-wide comparisons and microphone analysis share a **single Gradio concurrency group (limit 1)**. Starting a different import while one is processing queues the new job instead of overlapping or cancelling the first. Metadata-only YouTube discovery remains independent and can run in parallel. The catalog refreshes after each queued import; restarting Gradio discards queued jobs and the in-memory catalog.
 - **Session-only state:** no database and no persistence. Restarting Gradio clears the catalog; this is intentional for a small demo.
 
 ## Architecture
@@ -72,6 +73,15 @@ You can retry a failed **metadata-only** catalog entry by selecting the same vid
 The previous implementation compared normalized 12-bin chroma vectors from the **whole mixed audio**. Because most notes contain broad harmonic energy, unrelated recordings could produce almost identical chroma vectors. Searching over time offsets, transpositions and tempo variants could then return misleading ~99% alignment scores.
 
 The experimental matcher now subtracts each recording's stable pitch-class background and compares **changing tonal patterns** instead. If the audio contains no discriminative tonal changes, the metric is **N/A** rather than an artificial high match. It does not isolate the singer or identify a tune from its true melodic contour. A high score means the tonal patterns aligned under the tested transformations, **not** that the songs are confirmed covers. Real-world validation requires an annotated benchmark of same-song/different-song recordings and ranking metrics such as Recall@K. Lyrics matching remains independent.
+
+## Testing the job queue
+
+1. Start importing a YouTube result that requires lyric lookup, embedding, or audio analysis.
+2. Before it finishes, switch to **Local catalog**, upload a different audio file, and click **Add song to catalog**.
+3. The second import must **wait**, while the first finishes and updates the session catalog. Both entries should appear afterward; one job must not cancel the other.
+4. Repeat with **Add link to catalog** and **Compare all catalog lyrics**. Comparison must run only after queued imports finish. **Discover covers on YouTube** can still search video metadata independently.
+
+The queue is intentionally serial for CPU reliability and to avoid concurrent writes to the session catalog. Queued work is not persistent across browser/server restarts; do not close/restart the running app while testing.
 
 ## Testing the melody prototype
 
