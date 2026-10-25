@@ -1,0 +1,2 @@
+# Install this project and all standard runtime dependencies from pyproject.toml.
+-e .

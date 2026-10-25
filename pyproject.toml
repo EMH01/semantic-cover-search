@@ -10,14 +10,20 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "faiss-cpu>=1.8",
+  "sherpa-onnx>=1.12.0",
+  "huggingface-hub>=0.21",
+  "av>=11,<18",
+  "sentence-transformers>=3.0",
   "gradio>=5.0",
+  "httpx>=0.27",
   "numpy>=1.26",
-  "openai>=1.68",
   "python-dotenv>=1.0",
+  "mutagen>=1.47",
+  "yt-dlp[default]>=2025.11.12",
 ]
 
 [project.optional-dependencies]
-youtube = ["yt-dlp>=2025.1"]
+openai = ["openai>=1.68"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [tool.hatch.build.targets.wheel]
@@ -29,3 +35,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+# Avoid inaccessible global Windows TEMP folders when using tmp_path fixtures.
+addopts = "--basetemp=.pytest_tmp"

@@ -7,6 +7,7 @@ class Song:
     artist: str
     transcript: str
     source: str = "upload"
+    text_origin: str = "asr"  # "lrclib", "asr" or "none"
 
     @property
     def label(self) -> str:
