@@ -1,8 +1,12 @@
 # Semantic Cover Search
 
-**[Live demo on Hugging Face Spaces](https://huggingface.co/spaces/esthermariamh/semantic-cover-search)** · Gradio · ZeroGPU hosting
+**[Live Demo on Hugging Face Spaces](https://huggingface.co/spaces/esthermariamh/semantic-cover-search)** · Gradio
 
-Semantic Cover Search is a research-oriented application for discovering candidate song covers on YouTube and comparing recordings through **lyric similarity and experimental audio features**. It combines reference-lyric retrieval, local speech recognition, multilingual text embeddings and tonal-pattern analysis in a temporary session catalog. It does **not** identify arbitrary, unindexed songs from audio.
+Semantic Cover Search is an AI-powered music discovery and comparison application designed to explore cover versions and similarities between songs.
+
+It combines YouTube cover discovery, lyrics retrieval, speech recognition, semantic search, and audio analysis to examine how different recordings relate through their lyrical content and musical characteristics.
+
+Users can discover performances, build a temporary song catalog, and compare recordings through shared lyrical phrases, semantic similarity, and tonal patterns.
 
 ## Features
 
