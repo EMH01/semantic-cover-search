@@ -1,0 +1,39 @@
+name: Sync to Hugging Face Spaces
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: huggingface-space-deploy
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Publish Space
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Hugging Face token configuration
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::Repository secret HF_TOKEN is missing. Create a fine-grained Hugging Face token with write access to esthermariamh/semantic-cover-search."
+            exit 1
+          fi
+
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Sync repository to Hugging Face
+        uses: huggingface/hub-sync@v0.3.0
+        with:
+          github_repo_id: ${{ github.repository }}
+          huggingface_repo_id: esthermariamh/semantic-cover-search
+          repo_type: space
+          space_sdk: gradio
+          hf_token: ${{ secrets.HF_TOKEN }}
