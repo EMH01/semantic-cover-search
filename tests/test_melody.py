@@ -27,7 +27,8 @@ def test_melody_finds_a_query_inside_longer_reference():
     notes = [0, 2, 4, 5, 7, 9, 7, 5, 4, 2, 0, 11]
     reference = _notes([11] * 20 + notes + [6] * 20)
     score, offset, shift = melody_match(_notes(notes), reference)
-    assert score == pytest.approx(1.0, abs=1e-5)
+    # The shared phrase is still located despite different static intros.
+    assert score > 0.75
     assert offset == pytest.approx(20 * HOP / SAMPLE_RATE)
     assert shift == 0
 
@@ -72,12 +73,37 @@ def test_no_reference_raises_comparison_error():
         melody_match(_notes([0, 1, 2]), _notes([0, 1, 2]))
 
 
-def test_melody_matches_are_not_probabilities():
+def test_static_reference_cannot_be_used_as_melodic_evidence():
     query = _notes([0, 1, 4, 6, 7, 10, 7, 6, 4, 1, 0, 1])
     other = _notes([9] * 35)
-    score, _, _ = melody_match(query, other)
-    assert 0 <= score <= 1
-    assert score < 0.4
+    with pytest.raises(MelodyError, match="Not enough changing tonal"):
+        melody_match(query, other)
+
+
+def test_unrelated_flat_spectra_are_not_99_percent_melody_matches():
+    # Reproduces the previous failure: normalized broad-spectrum chroma
+    # can give >99% raw cosine for unrelated random tonal sequences.
+    def flattened_chroma(frames: int, seed: int) -> np.ndarray:
+        rng = np.random.default_rng(seed)
+        samples = 1.0 + 0.04 * rng.normal(size=(frames, 12))
+        samples /= np.linalg.norm(samples, axis=1, keepdims=True)
+        return samples.astype(np.float32)
+
+    first = flattened_chroma(125, 44)
+    second = flattened_chroma(350, 56)
+    # Old algorithm using raw chroma cosine would score approximately 0.999.
+    naive_frame_cosine = np.mean(np.sum(first * second[:125], axis=1))
+    assert naive_frame_cosine > 0.99
+    score, _, _ = melody_match(first, second)
+    assert 0 <= score < 0.35
+
+
+def test_same_sequence_remains_high_after_background_centering():
+    notes = [0, 2, 4, 5, 7, 9, 7, 5, 4, 2, 0, 11]
+    reference = _notes(notes * 9)
+    query = reference[:60].copy()
+    score, _, _ = melody_match(query, reference)
+    assert score > 0.95
 
 
 def _wav_tone(frequency: int = 440, seconds: int = 4) -> bytes:
