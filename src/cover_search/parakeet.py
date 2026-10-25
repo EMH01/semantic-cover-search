@@ -57,6 +57,6 @@ def transcribe_parakeet(audio_bytes: bytes, filename: str = "audio") -> str:
     if not transcript:
         raise ValueError(
             "Parakeet produced an empty transcript. "
-            "Try clear speech or compare with ASR_ENGINE=whisper."
+            "Try clearer spoken words; singing and humming may not transcribe."
         )
     return transcript
