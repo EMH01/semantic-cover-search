@@ -54,7 +54,7 @@ Use Python 3.11 or 3.12 and a per-project virtual environment.
 
 ```powershell
 py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\python.exe app.py
 ```
 
