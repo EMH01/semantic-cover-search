@@ -20,7 +20,7 @@ dependencies = [
   "numpy>=1.26",
   "python-dotenv>=1.0",
   "mutagen>=1.47",
-  "yt-dlp>=2025.1",
+  "yt-dlp[default]>=2025.11.12",
 ]
 
 [project.optional-dependencies]
