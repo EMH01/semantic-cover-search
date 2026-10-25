@@ -230,7 +230,7 @@ def test_melody_is_third_metric_not_standalone_link_action():
     import app
 
     source = Path(app.__file__).read_text(encoding="utf-8")
-    assert "Melody similarity · experimental" in source
+    assert "Tonal pattern similarity · experimental" in source
     assert "Analyze this YouTube melody" not in source
     assert "Analyze this audio as a melody reference" not in source
     assert "Find matching melodies" not in source
