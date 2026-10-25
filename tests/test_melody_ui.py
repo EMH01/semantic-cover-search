@@ -204,6 +204,9 @@ def test_uploaded_sung_audio_keeps_tonal_features_when_asr_is_empty(
 
     song_file = tmp_path / "At First Sight.mp3"
     song_file.write_bytes(b"valid audio placeholder")
+    # The fixture contains placeholder bytes, not real MP3 MPEG frames.
+    # Isolate this test from Mutagen: metadata parsing has its own tests.
+    monkeypatch.setattr(app, "audio_metadata", lambda _: ("At First Sight", "Example performer"))
     monkeypatch.setattr(
         app, "find_lyrics",
         lambda *args: (_ for _ in ()).throw(
