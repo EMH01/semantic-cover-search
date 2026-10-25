@@ -54,6 +54,23 @@ APP_CSS = """
     max-width: 700px;
     margin: 0;
 }
+/* Gradio 6 theme typography may override inherited colors inside gr.HTML.
+   Explicit, scoped specificity keeps the hero readable in both themes. */
+.gradio-container .scs-hero .scs-eyebrow {
+    color: #d9ddff !important;
+}
+.gradio-container .scs-hero .scs-brand {
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+.gradio-container .scs-hero .scs-tagline {
+    color: #edf0ff !important;
+    opacity: 1 !important;
+}
+.gradio-container .scs-hero .scs-capabilities span {
+    color: #ffffff !important;
+}
+
 .scs-hero .scs-capabilities {
     display: flex;
     flex-wrap: wrap;
