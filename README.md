@@ -1,3 +1,14 @@
+---
+title: Semantic Cover Search
+emoji: 🎵
+colorFrom: purple
+colorTo: blue
+sdk: gradio
+app_file: app.py
+python_version: "3.12"
+short_description: Discover song covers and compare lyrics and tonal patterns
+---
+
 # Semantic Cover Search
 
 A local-first research prototype for discovering song covers on YouTube and comparing songs through lyric and experimental audio similarity. **Melody comparison uses features automatically extracted from uploaded audio files and accessible YouTube recordings**; it cannot identify arbitrary unindexed songs across the internet.
