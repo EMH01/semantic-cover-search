@@ -11,7 +11,7 @@ import gradio as gr
 
 from cover_search.config import Settings
 from cover_search.index import SongIndex
-from cover_search.local import embed_local, transcribe_local
+from cover_search.local import embed_local
 from cover_search.lyrics import (
     LyricsLookupError,
     find_lyrics,
@@ -24,7 +24,7 @@ from cover_search.melody import MelodyError, extract_chroma
 from cover_search.metadata import audio_metadata
 from cover_search.models import Song
 from cover_search.parakeet import transcribe_parakeet
-from cover_search.services import embed_text, transcribe_audio
+from cover_search.services import embed_text
 from cover_search.ui_theme import APP_CSS, HERO_HTML
 from cover_search.youtube import (
     download_audio,
@@ -50,15 +50,8 @@ def read_audio(path: str) -> bytes:
 
 
 def transcribe(data: bytes, filename: str) -> str:
-    if settings.provider not in {"local", "openai"}:
-        raise gr.Error("AI_PROVIDER must be local or openai.")
-    if settings.provider == "local":
-        if settings.asr_engine == "parakeet":
-            return transcribe_parakeet(data, filename)
-        if settings.asr_engine == "whisper":
-            return transcribe_local(data, filename, settings.local_whisper_model)
-        raise gr.Error("ASR_ENGINE must be parakeet or whisper.")
-    return transcribe_audio(get_client(), data, filename, settings.transcription_model)
+    """Always transcribe on-device with NVIDIA Parakeet."""
+    return transcribe_parakeet(data, filename)
 
 
 def embed(text: str):
